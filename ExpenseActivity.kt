@@ -52,6 +52,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -91,6 +92,10 @@ class ExpenseActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedPreferences = getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
+
+        // Отримання вибраної валюти з SharedPreferences
+        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+        viewModel.selectedCurrency = selectedCurrency
 
         loadExpensesFromSharedPreferences()
         loadCategoriesFromSharedPreferences() // Завантаження категорій
@@ -143,6 +148,7 @@ class ExpenseActivity : ComponentActivity() {
                         content = { innerPadding ->
                             ExpenseScreen(
                                 viewModel = viewModel,
+                                selectedCurrency = viewModel.selectedCurrency, // Передаємо вибрану валюту
                                 onOpenTransactionScreen = { categoryName, transactionsJson ->
                                     val intent = Intent(this, ExpenseTransactionActivity::class.java).apply {
                                         putExtra("categoryName", categoryName)
@@ -166,12 +172,16 @@ class ExpenseActivity : ComponentActivity() {
 
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES") {
+                if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES" || intent.action == "com.example.homeaccountingapp.UPDATE_CURRENCY") {
+                    val newCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+                    viewModel.selectedCurrency = newCurrency
                     viewModel.loadData()
                 }
             }
         }
-        val filter = IntentFilter("com.example.homeaccountingapp.UPDATE_EXPENSES")
+        val filter = IntentFilter("com.example.homeaccountingapp.UPDATE_EXPENSES").apply {
+            addAction("com.example.homeaccountingapp.UPDATE_CURRENCY")
+        }
         LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, filter)
     }
 
@@ -224,6 +234,9 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _sortedTransactions = MutableStateFlow<List<Transaction>>(emptyList())
     val sortedTransactions: StateFlow<List<Transaction>> = _sortedTransactions
 
+    // Додайте змінну selectedCurrency
+    var selectedCurrency by mutableStateOf("₴")
+
     // Створення властивості для зберігання функції
     private var sendUpdateBroadcast: (() -> Unit)? = null
 
@@ -243,13 +256,13 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
     // Завантаження стандартних категорій
     fun loadStandardCategories() {
-        categories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки", "Хобі", "Благодійність", "Спорт", "Техніка")
+        categories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки")
         saveCategories(categories)
     }
 
     // Отримання стандартних категорій
     fun getStandardCategories(): List<String> {
-        return listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки", "Хобі", "Благодійність", "Спорт", "Техніка")
+        return listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки")
     }
 
     // Функція для завантаження даних
@@ -302,6 +315,18 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         sortTransactions(sortType)  // Сортування транзакцій після їх оновлення
         updateExpenses()
         sendUpdateBroadcast()
+    }
+
+    fun addTransaction(newTransaction: Transaction) {
+        viewModelScope.launch {
+            val currentTransactions = loadTransactions().toMutableList()
+            currentTransactions.add(newTransaction)
+            _transactions.value = currentTransactions
+            saveTransactions(currentTransactions)
+            updateExpenses()
+            sortTransactions(sortType)
+            sendUpdateBroadcast()
+        }
     }
 
     // Нова функція для фільтрації транзакцій за періодом
@@ -407,6 +432,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 @Composable
 fun ExpenseScreen(
     viewModel: ExpenseViewModel,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onOpenTransactionScreen: (String, String) -> Unit,
     onDeleteCategory: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -454,6 +480,7 @@ fun ExpenseScreen(
                             CategoryRow(
                                 category = category,
                                 expenseAmount = categoryExpenses[category] ?: 0.0,
+                                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                 onClick = {
                                     onOpenTransactionScreen(category, Gson().toJson(transactions))
                                 },
@@ -531,7 +558,7 @@ fun ExpenseScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Text(
-                    text = "${totalExpense.formatAmount(2)} грн",
+                    text = "${totalExpense.formatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = Color.White
                 )
@@ -590,9 +617,7 @@ fun ExpenseScreen(
                 categories = categories,
                 onDismiss = { showAddTransactionDialog = false },
                 onSave = { transaction ->
-                    val updatedTransactions = transactions.toMutableList()
-                    updatedTransactions.add(transaction)
-                    viewModel.updateTransactions(updatedTransactions)
+                    viewModel.addTransaction(transaction)
                     showAddTransactionDialog = false
                 }
             )
@@ -625,6 +650,7 @@ fun ExpenseScreen(
 fun CategoryRow(
     category: String,
     expenseAmount: Double,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit
@@ -659,7 +685,7 @@ fun CategoryRow(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "${expenseAmount.formatAmount(2)} грн",
+                text = "${expenseAmount.formatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize),
                 color = Color.White,
                 modifier = Modifier.padding(end = 8.dp)
@@ -984,27 +1010,12 @@ fun AddTransactionDialog(
                             modifier = Modifier.background(Color.DarkGray)
                         )
                     }
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "Додати категорію",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp // Збільшення розміру шрифту для кращої читабельності
-                            )
-                        },
-                        modifier = Modifier
-                            .background(Color.DarkGray)
-                            .border(2.dp, Color.White, RoundedCornerShape(8.dp)) // Додаємо білу рамку
-                            .padding(8.dp),
-                        onClick = {}
-                    )
                 }
             }
             OutlinedTextField(
                 value = comment,
-                onValueChange = { comment = it.takeIf { it.isNotBlank() } ?: "" },
-                label = { Text("Коментар (необов'язково)", color = Color.Gray) },
+                onValueChange = { comment = it },
+                label = { Text("Коментар", color = Color.White) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
@@ -1015,36 +1026,38 @@ fun AddTransactionDialog(
                     cursorColor = Color.White,
                     focusedLabelColor = Color.White,
                     unfocusedLabelColor = Color.Gray,
-                    containerColor = Color.Transparent // Прозорий фон для поля вводу
+                    containerColor = Color.Transparent, // Прозорий фон для поля вводу
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
                 ),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold) // Білий і жирний текст
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Скасувати", color = Color.Red, fontWeight = FontWeight.Bold) // Червоний жирний текст
+                TextButton(onClick = onDismiss) {
+                    Text("Скасувати", color = Color.Gray)
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                TextButton(
+                Spacer(modifier = Modifier.width(16.dp))
+                Button(
                     onClick = {
-                        val transaction = Transaction(
-                            id = UUID.randomUUID().toString(),
-                            amount = amount.toDoubleOrNull() ?: 0.0,
-                            date = date,
-                            category = selectedCategory,
-                            comments = comment.takeIf { it.isNotBlank() } // Використання takeIf для comments
-                        )
-                        onSave(transaction)
+                        if (amount.isNotBlank() && selectedCategory.isNotBlank()) {
+                            val transaction = Transaction(
+                                id = UUID.randomUUID().toString(),
+                                amount = -amount.toDouble(), // Витрати мають бути від'ємні
+                                category = selectedCategory,
+                                date = LocalDate.now().toString(),
+                                comments = comment
+                            )
+                            onSave(transaction)
+                        }
                     },
-                    modifier = Modifier.weight(1f)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
                 ) {
-                    Text("Зберегти", color = Color.Green, fontWeight = FontWeight.Bold) // Зелений жирний текст
+                    Text("Зберегти", color = Color.White)
                 }
             }
         }
