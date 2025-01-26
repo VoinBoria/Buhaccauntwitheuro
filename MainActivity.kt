@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -117,7 +118,7 @@ class MainActivity : ComponentActivity() {
         val sharedPreferences = context.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
         val isFirstLaunch = sharedPreferences.getBoolean("IS_FIRST_LAUNCH", true)
         var showCurrencyDialog by remember { mutableStateOf(isFirstLaunch) }
-        var selectedCurrency by remember { mutableStateOf(sharedPreferences.getString("SELECTED_CURRENCY", "грн") ?: "грн") }
+        var selectedCurrency by remember { mutableStateOf(sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴") }
 
         var incomes by remember { mutableStateOf(mapOf<String, Double>()) }
         var expenses by remember { mutableStateOf(mapOf<String, Double>()) }
@@ -140,35 +141,51 @@ class MainActivity : ComponentActivity() {
                 startActivity(intent)
             },
             onNavigateToIncomes = {
-                val intent = Intent(this@MainActivity, IncomeActivity::class.java)
+                val intent = Intent(this@MainActivity, IncomeActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToExpenses = {
-                val intent = Intent(this@MainActivity, ExpenseActivity::class.java)
+                val intent = Intent(this@MainActivity, ExpenseActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToIssuedOnLoan = {
-                val intent = Intent(this@MainActivity, IssuedOnLoanActivity::class.java)
+                val intent = Intent(this@MainActivity, IssuedOnLoanActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToBorrowed = {
-                val intent = Intent(this@MainActivity, BorrowedActivity::class.java)
+                val intent = Intent(this@MainActivity, BorrowedActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToAllTransactionIncome = {
-                val intent = Intent(this@MainActivity, AllTransactionIncomeActivity::class.java)
+                val intent = Intent(this@MainActivity, AllTransactionIncomeActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToAllTransactionExpense = {
-                val intent = Intent(this@MainActivity, AllTransactionExpenseActivity::class.java)
+                val intent = Intent(this@MainActivity, AllTransactionExpenseActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToBudgetPlanning = {
-                val intent = Intent(this@MainActivity, BudgetPlanningActivity::class.java)
+                val intent = Intent(this@MainActivity, BudgetPlanningActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             onNavigateToTaskActivity = {
-                val intent = Intent(this@MainActivity, TaskActivity::class.java)
+                val intent = Intent(this@MainActivity, TaskActivity::class.java).apply {
+                    putExtra("SELECTED_CURRENCY", selectedCurrency)
+                }
                 startActivity(intent)
             },
             viewModel = viewModel,
@@ -188,7 +205,8 @@ class MainActivity : ComponentActivity() {
             expenses = expenses,
             totalIncomes = totalIncomes,
             totalExpenses = totalExpenses,
-            selectedCurrency = selectedCurrency
+            selectedCurrency = selectedCurrency,
+            onSettingsClick = { showCurrencyDialog = true } // Додаємо обробник натискання на іконку шестерні
         )
 
         if (showCurrencyDialog) {
@@ -206,10 +224,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 fun CurrencySelectionDialog(onCurrencySelected: (String) -> Unit) {
-    val currencies = listOf("Гривна", "Євро", "Доллар")
+    val currencies = listOf("₴", "€", "$")
     var selectedCurrency by remember { mutableStateOf(currencies[0]) }
 
     AlertDialog(
@@ -489,7 +506,8 @@ fun MainScreen(
     expenses: Map<String, Double>,
     totalIncomes: Double,
     totalExpenses: Double,
-    selectedCurrency: String // Додаємо цей параметр
+    selectedCurrency: String, // Додаємо цей параметр
+    onSettingsClick: () -> Unit // Додаємо цей параметр
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -560,6 +578,15 @@ fun MainScreen(
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Меню",
+                                tint = Color.White
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Налаштування",
                                 tint = Color.White
                             )
                         }
@@ -852,7 +879,6 @@ fun MainScreen(
                             )
                         }
                     }
-
 
                     Row(
                         modifier = Modifier
