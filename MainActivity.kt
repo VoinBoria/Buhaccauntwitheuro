@@ -94,7 +94,8 @@ class MainActivity : ComponentActivity() {
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES" ||
-                    intent.action == "com.example.homeaccountingapp.UPDATE_INCOME") {
+                    intent.action == "com.example.homeaccountingapp.UPDATE_INCOME" ||
+                    intent.action == "com.example.homeaccountingapp.UPDATE_CURRENCY") {
                     viewModel.refreshExpenses()
                     viewModel.refreshIncomes()
                     viewModel.refreshCategories() // Оновлення категорій
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
         val filter = IntentFilter().apply {
             addAction("com.example.homeaccountingapp.UPDATE_EXPENSES")
             addAction("com.example.homeaccountingapp.UPDATE_INCOME")
+            addAction("com.example.homeaccountingapp.UPDATE_CURRENCY") // Додаємо фільтр для оновлення валюти
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, filter)
     }
@@ -111,6 +113,24 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver)
+    }
+
+    // Додайте функцію для оновлення валюти
+    private fun updateCurrency(newCurrency: String) {
+        sharedPreferences.edit().putString("SELECTED_CURRENCY", newCurrency).apply()
+        val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
+    }
+
+    // Оновлена функція для відправки broadcast
+    private fun sendUpdateBroadcast() {
+        // Створення та відправка broadcast для оновлення витрат
+        val updateExpensesIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateExpensesIntent)
+
+        // Створення та відправка broadcast для оновлення валюти
+        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateCurrencyIntent)
     }
 
     @Composable
@@ -212,7 +232,7 @@ class MainActivity : ComponentActivity() {
 
         if (showCurrencyDialog) {
             CurrencySelectionDialog(onCurrencySelected = { currency ->
-                sharedPreferences.edit().putString("SELECTED_CURRENCY", currency).apply()
+                updateCurrency(currency)  // Виклик функції для оновлення валюти
                 sharedPreferences.edit().putBoolean("IS_FIRST_LAUNCH", false).apply()
                 showCurrencyDialog = false
                 selectedCurrency = currency
