@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -53,7 +54,9 @@ import kotlinx.coroutines.*
 
 class BudgetPlanningActivity : ComponentActivity() {
     private val viewModel: BudgetPlanningViewModel by viewModels()
+    private lateinit var sharedPreferences: SharedPreferences
 
+    // Додаємо визначення updateReceiver
     private val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if ("com.example.homeaccountingapp.UPDATE_EXPENSES" == intent.action) {
@@ -65,6 +68,9 @@ class BudgetPlanningActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
+        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+
         setContent {
             HomeAccountingAppTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -117,7 +123,7 @@ class BudgetPlanningActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxSize()
                                 ) {
                                     Spacer(modifier = Modifier.height(40.dp))
-                                    BudgetPlanningScreen(viewModel)
+                                    BudgetPlanningScreen(viewModel, selectedCurrency)
                                 }
                             }
                         }
@@ -126,6 +132,7 @@ class BudgetPlanningActivity : ComponentActivity() {
             }
         }
 
+        // Реєструємо updateReceiver
         LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, IntentFilter("com.example.homeaccountingapp.UPDATE_EXPENSES"))
 
         viewModel.loadExpenseCategories(this)
@@ -136,6 +143,7 @@ class BudgetPlanningActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Відключаємо updateReceiver
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver)
     }
 
@@ -330,7 +338,7 @@ class BudgetPlanningViewModel(application: Application) : AndroidViewModel(appli
 }
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel) {
+fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel, selectedCurrency: String) {
     val expenseCategories by viewModel.expenseCategories.observeAsState(emptyMap())
     val maxExpenses by viewModel.maxExpenses.observeAsState(emptyMap())
     val expenses by viewModel.expenses.observeAsState(emptyMap())
@@ -367,6 +375,7 @@ fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel) {
                         category = category,
                         expense = expense,
                         maxExpense = maxExpense,
+                        selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                         onToggleAddingLimit = {
                             viewModel.toggleAddingLimit(category)
                         }
@@ -391,6 +400,7 @@ fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel) {
         if (isAddingLimit) {
             AddLimitDialog(
                 category = viewModel.currentCategory ?: "",
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismissRequest = { viewModel.isAddingLimit.value = false },
                 onSaveMaxExpense = { maxExpense ->
                     viewModel.currentCategory?.let { category ->
@@ -408,6 +418,7 @@ fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel) {
                 weeklySaving = viewModel.weeklySaving,
                 monthlySaving = viewModel.monthlySaving,
                 savedAmount = viewModel.savedAmount, // Передача savedAmount
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onGoalAmountChange = { viewModel.goalAmount = it },
                 onGoalPeriodChange = { viewModel.goalPeriod = it },
                 onSavedAmountChange = { viewModel.savedAmount = it },
@@ -431,6 +442,7 @@ fun BudgetPlanningScreen(viewModel: BudgetPlanningViewModel) {
         if (isViewingSavings) {
             SavingsListDialog(
                 savingsList = savingsList,
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismissRequest = { isViewingSavings = false },
                 onUpdateSaving = { index, newAmount -> viewModel.updateSaving(context, index, newAmount) },
                 onDeleteSaving = { index -> viewModel.deleteSaving(context, index) }
@@ -445,6 +457,7 @@ fun BudgetCategoryItemWithRedBackground(
     category: String,
     expense: Double,
     maxExpense: Double,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onToggleAddingLimit: () -> Unit
 ) {
     BoxWithConstraints {
@@ -496,7 +509,7 @@ fun BudgetCategoryItemWithRedBackground(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Ліміт: ${if (maxExpense > 0) maxExpense.formatBudgetAmount(2) + " грн" else "не заданий"}",
+                    text = "Ліміт: ${if (maxExpense > 0) maxExpense.formatBudgetAmount(2) + " $selectedCurrency" else "не заданий"}",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = fontSize),
                     color = Color.Gray
                 )
@@ -519,6 +532,7 @@ fun Double.formatBudgetAmount(digits: Int): String {
 @Composable
 fun AddLimitDialog(
     category: String,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismissRequest: () -> Unit,
     onSaveMaxExpense: (Double) -> Unit,
     textColor: Color = Color.White // Параметр для кольору тексту
@@ -581,6 +595,7 @@ fun AddGoalDialog(
     weeklySaving: String,
     monthlySaving: String,
     savedAmount: String,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onGoalAmountChange: (String) -> Unit,
     onGoalPeriodChange: (String) -> Unit,
     onSavedAmountChange: (String) -> Unit,
@@ -606,7 +621,7 @@ fun AddGoalDialog(
                 OutlinedTextField(
                     value = goalAmount,
                     onValueChange = onGoalAmountChange,
-                    label = { Text("Моя ціль (грн)", color = Color.White) },
+                    label = { Text("Моя ціль ($selectedCurrency)", color = Color.White) }, // Використовуємо вибрану валюту
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     colors = TextFieldDefaults.outlinedTextFieldColors(
                         focusedBorderColor = Color.Gray,
@@ -641,19 +656,19 @@ fun AddGoalDialog(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Відкладати щотижня: $weeklySaving грн",
+                    text = "Відкладати щотижня: $weeklySaving $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Відкладати щомісяця: $monthlySaving грн",
+                    text = "Відкладати щомісяця: $monthlySaving $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Divider(color = Color.Gray)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Накопичена сума збережень: ${savedAmounts.sum()} грн",
+                    text = "Накопичена сума збережень: ${savedAmounts.sum()} $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -699,7 +714,7 @@ fun AddGoalDialog(
                                 val updatedSavedAmounts = savedAmounts + newSavedAmount
                                 editor.putString("saved_amounts", Gson().toJson(updatedSavedAmounts))
                                 editor.apply()
-                                Toast.makeText(localContext, "Ви заощадили $newSavedAmount грн", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(localContext, "Ви заощадили $newSavedAmount $selectedCurrency", Toast.LENGTH_SHORT).show() // Використовуємо вибрану валюту
                             } else {
                                 Toast.makeText(localContext, "Введіть дійсне значення", Toast.LENGTH_SHORT).show()
                             }
@@ -753,6 +768,7 @@ fun Double.format(digits: Int) = "%.${digits}f".format(this)
 @Composable
 fun SavingsListDialog(
     savingsList: List<Double>,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismissRequest: () -> Unit,
     onUpdateSaving: (Int, Double) -> Unit,
     onDeleteSaving: (Int) -> Unit
@@ -850,7 +866,7 @@ fun SavingsListDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "${saving} грн",
+                                text = "${saving} $selectedCurrency", // Використовуємо вибрану валюту
                                 color = Color.White,
                                 modifier = Modifier.weight(1f),
                                 fontSize = fontSize
