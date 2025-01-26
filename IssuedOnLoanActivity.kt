@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.DatePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -58,6 +59,8 @@ import java.text.SimpleDateFormat
 
 class IssuedOnLoanActivity : ComponentActivity() {
     private val loanViewModel: LoanViewModel by viewModels { LoanViewModelFactory(application) }
+    private lateinit var sharedPreferences: SharedPreferences
+
     private fun <T> navigateToActivity(activityClass: Class<T>) {
         val intent = Intent(this, activityClass)
         startActivity(intent)
@@ -66,6 +69,9 @@ class IssuedOnLoanActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
+        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+
         setContent {
             HomeAccountingAppTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -125,7 +131,10 @@ class IssuedOnLoanActivity : ComponentActivity() {
                                     )
                                     .padding(innerPadding)
                             ) {
-                                IssuedOnLoanScreen(viewModel = loanViewModel)
+                                IssuedOnLoanScreen(
+                                    viewModel = loanViewModel,
+                                    selectedCurrency = selectedCurrency // Передаємо вибрану валюту
+                                )
 
                                 // Анімоване повідомлення про прострочені позичання
                                 AnimatedVisibility(
@@ -163,6 +172,7 @@ class IssuedOnLoanActivity : ComponentActivity() {
 @Composable
 fun IssuedOnLoanScreen(
     viewModel: LoanViewModel,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     modifier: Modifier = Modifier
 ) {
     var showAddLoanDialog by remember { mutableStateOf(false) }
@@ -189,7 +199,12 @@ fun IssuedOnLoanScreen(
                         .weight(1f)
                 ) {
                     items(transactions) { loanTransaction ->
-                        LoanTransactionRow(loanTransaction, viewModel, onEdit = { transactionToEdit = it })
+                        LoanTransactionRow(
+                            loanTransaction,
+                            viewModel,
+                            selectedCurrency, // Передаємо вибрану валюту
+                            onEdit = { transactionToEdit = it }
+                        )
                     }
                 }
 
@@ -206,7 +221,7 @@ fun IssuedOnLoanScreen(
                         modifier = Modifier.padding(bottom = padding)
                     )
                     Text(
-                        text = "${totalLoaned.formatLoanAmount(2)} грн",
+                        text = "${totalLoaned.formatLoanAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = Color.White
                     )
@@ -238,16 +253,21 @@ fun IssuedOnLoanScreen(
                         transactionToEdit = null
                         showAddLoanDialog = false
                     },
-                    transactionToEdit = transactionToEdit
+                    transactionToEdit = transactionToEdit,
+                    selectedCurrency = selectedCurrency // Передаємо вибрану валюту
                 )
             }
         }
     }
 }
-
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
-fun LoanTransactionRow(loanTransaction: LoanTransaction, viewModel: LoanViewModel, onEdit: (LoanTransaction) -> Unit) {
+fun LoanTransactionRow(
+    loanTransaction: LoanTransaction,
+    viewModel: LoanViewModel,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
+    onEdit: (LoanTransaction) -> Unit
+) {
     BoxWithConstraints {
         val screenWidth = maxWidth
         val fontSize = if (screenWidth < 360.dp) 14.sp else 18.sp
@@ -273,7 +293,7 @@ fun LoanTransactionRow(loanTransaction: LoanTransaction, viewModel: LoanViewMode
         ) {
             Column {
                 Text(
-                    text = "Сума: ${loanTransaction.amount.formatLoanAmount(2)} грн",
+                    text = "Сума: ${loanTransaction.amount.formatLoanAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
                     style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Bold, color = Color.Red),
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
@@ -317,7 +337,8 @@ fun Double.formatLoanAmount(digits: Int): String {
 fun AddOrEditLoanTransactionDialog(
     onDismiss: () -> Unit,
     onSave: (LoanTransaction) -> Unit,
-    transactionToEdit: LoanTransaction? = null
+    transactionToEdit: LoanTransaction? = null,
+    selectedCurrency: String // Додаємо параметр для вибраної валюти
 ) {
     var amount by remember { mutableStateOf(transactionToEdit?.amount?.toString() ?: "") }
     var borrowerName by remember { mutableStateOf(transactionToEdit?.borrowerName ?: "") }
@@ -347,13 +368,13 @@ fun AddOrEditLoanTransactionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = if (transactionToEdit != null) "Редагування транзакції" else "Додавання нової транзакції", style = TextStyle(color = Color.White)) },
+        title = { Text(text = if (transactionToEdit != null) "Редагування транзакції" else "Додавання нової транзакції", style = TextStyle(color = Color.White, fontWeight = FontWeight.Bold)) },
         text = {
             Column {
                 TextField(
                     value = amount,
                     onValueChange = { amount = it },
-                    label = { Text("Сума", style = TextStyle(color = Color.White)) },
+                    label = { Text("Сума ($selectedCurrency)", style = TextStyle(color = Color.White)) }, // Використовуємо вибрану валюту
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     textStyle = TextStyle(color = Color.White, fontWeight = FontWeight.Bold),
                     colors = TextFieldDefaults.textFieldColors(
