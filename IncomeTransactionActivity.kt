@@ -60,6 +60,7 @@ class IncomeTransactionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val categoryName = intent.getStringExtra("categoryName") ?: "Категорія"
+        val selectedCurrency = intent.getStringExtra("selectedCurrency") ?: "₴"  // Додаємо вибрану валюту
 
         // Завантажуємо дані для вибраної категорії
         viewModel.filterByCategory(categoryName)
@@ -122,6 +123,7 @@ class IncomeTransactionActivity : ComponentActivity() {
                             ) {
                                 IncomeTransactionScreen(
                                     categoryName = categoryName,
+                                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                     onUpdateTransactions = { updatedTransactions ->
                                         saveTransactionsIncome(updatedTransactions, categoryName)
                                     }
@@ -260,6 +262,7 @@ fun showIncomeDatePickerDialog(context: Context, initialDate: LocalDate, onDateS
 @Composable
 fun IncomeTransactionScreen(
     categoryName: String,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onUpdateTransactions: (List<IncomeTransaction>) -> Unit,
     viewModel: IncomeViewModel = viewModel()
 ) {
@@ -297,29 +300,17 @@ fun IncomeTransactionScreen(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         )
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(96.dp)
-                .align(Alignment.CenterEnd)
-                .background(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0x00000000),
-                            Color(0x99000000)
-                        )
-                    )
-                )
-        )
         Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 80.dp) // Додавання відступу знизу для уникнення налазання під напис
+                    .fillMaxHeight()
+                    .weight(1f)
+                    .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp) // Додавання відступу знизу для уникнення налазання під напис
             ) {
                 items(transactions) { transaction ->
                     IncomeTransactionItem(
                         transaction = transaction,
+                        selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                         onClick = {
                             selectedTransaction = transaction
                             showMenuDialog = true
@@ -327,11 +318,33 @@ fun IncomeTransactionScreen(
                     )
                 }
             }
+
+            // Додаємо текст "Загальні доходи" та суму доходів
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .background(Color(0xFF121212).copy(alpha = 0.6f))
+                    .padding(8.dp)
+            ) {
+                Spacer(modifier = Modifier.height(8.dp)) // Додати відступ між кнопкою та текстом
+                Text(
+                    text = "Загальні доходи:",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White
+                )
+                Text(
+                    text = "${totalIncomeForFilteredTransactions.incomeFormatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Color.Green // Зелений колір для суми доходів
+                )
+            }
         }
 
         if (showMenuDialog && selectedTransaction != null) {
             IncomeEditDeleteDialog(
                 transaction = selectedTransaction!!,
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismiss = { showMenuDialog = false },
                 onEdit = {
                     showMenuDialog = false
@@ -349,6 +362,7 @@ fun IncomeTransactionScreen(
         if (showEditDialog && selectedTransaction != null) {
             IncomeEditTransactionDialog(
                 transaction = selectedTransaction!!,
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismiss = { showEditDialog = false },
                 onSave = { updatedTransaction ->
                     viewModel.updateTransaction(updatedTransaction)
@@ -379,25 +393,6 @@ fun IncomeTransactionScreen(
                     LocalBroadcastManager.getInstance(context).sendBroadcast(updateIntent)
                 },
                 categoryName = categoryName
-            )
-        }
-
-        // Додаємо текст "Загальні доходи" та суму доходів
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(8.dp)) // Додати відступ між кнопкою та текстом
-            Text(
-                text = "Загальні доходи:",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White
-            )
-            Text(
-                text = "${totalIncomeForFilteredTransactions.incomeFormatAmount(2)} грн",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = Color.Green // Зелений колір для суми доходів
             )
         }
     }
@@ -514,6 +509,7 @@ fun IncomeAddTransactionDialog(
 @Composable
 fun IncomeTransactionItem(
     transaction: IncomeTransaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onClick: () -> Unit
 ) {
     Box(
@@ -536,7 +532,7 @@ fun IncomeTransactionItem(
     ) {
         Column {
             Text(
-                text = "Сума: ${transaction.amount} грн",
+                text = "Сума: ${transaction.amount} $selectedCurrency", // Використовуємо вибрану валюту
                 style = MaterialTheme.typography.bodyLarge.copy(color = Color.Green),
                 modifier = Modifier.padding(bottom = 4.dp)
             )
@@ -557,6 +553,7 @@ fun IncomeTransactionItem(
 @Composable
 fun IncomeEditDeleteDialog(
     transaction: IncomeTransaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -606,6 +603,7 @@ fun IncomeEditDeleteDialog(
 @Composable
 fun IncomeEditTransactionDialog(
     transaction: IncomeTransaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismiss: () -> Unit,
     onSave: (IncomeTransaction) -> Unit
 ) {
