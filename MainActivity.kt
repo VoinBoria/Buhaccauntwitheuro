@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Ініціалізація BroadcastReceiver для отримання оновлень
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES" ||
@@ -648,7 +649,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            IncomeList(incomes = incomes, onCategoryClick = onIncomeCategoryClick)
+                                            IncomeList(incomes = incomes, selectedCurrency = selectedCurrency, onCategoryClick = onIncomeCategoryClick)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -682,7 +683,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            ExpensesList(expenses = expenses, onCategoryClick = onExpenseCategoryClick)
+                                            ExpensesList(expenses = expenses, selectedCurrency = selectedCurrency, onCategoryClick = onExpenseCategoryClick)
                                         }
                                     }
                                 }
@@ -746,7 +747,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            IncomeList(incomes = incomes, onCategoryClick = onIncomeCategoryClick)
+                                            IncomeList(incomes = incomes, selectedCurrency = selectedCurrency, onCategoryClick = onIncomeCategoryClick)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -780,7 +781,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            ExpensesList(expenses = expenses, onCategoryClick = onExpenseCategoryClick)
+                                            ExpensesList(expenses = expenses, selectedCurrency = selectedCurrency, onCategoryClick = onExpenseCategoryClick)
                                         }
                                     }
 
