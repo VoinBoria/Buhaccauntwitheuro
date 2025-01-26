@@ -186,8 +186,13 @@ class ExpenseActivity : ComponentActivity() {
     }
 
     private fun sendUpdateBroadcast() {
-        val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
+        // Створення та відправка broadcast для оновлення витрат
+        val updateExpensesIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateExpensesIntent)
+
+        // Створення та відправка broadcast для оновлення валюти
+        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateCurrencyIntent)
     }
 
     private fun loadExpensesFromSharedPreferences() {
