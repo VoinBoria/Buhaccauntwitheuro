@@ -59,12 +59,13 @@ class ExpenseTransactionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val categoryName = intent.getStringExtra("categoryName") ?: "Категорія"
+        val selectedCurrency = intent.getStringExtra("selectedCurrency") ?: "₴"
         val gson = Gson()
         val sharedPreferences = getSharedPreferences("ExpensePrefs", MODE_PRIVATE)
         val transactionsJson = sharedPreferences.getString("transactions", "[]") ?: "[]"
         val type = object : TypeToken<List<Transaction>>() {}.type
-        val transactions = gson.fromJson<List<Transaction>>(transactionsJson, type).toMutableList()
-        val filteredTransactions = transactions.filter { it.category == categoryName }
+        val transactionList = gson.fromJson<List<Transaction>>(transactionsJson, type).toMutableList()
+        val filteredTransactions = transactionList.filter { it.category == categoryName }
 
         setContent {
             HomeAccountingAppTheme {
@@ -120,6 +121,7 @@ class ExpenseTransactionActivity : ComponentActivity() {
                                 ExpenseTransactionScreen(
                                     categoryName = categoryName,
                                     initialTransactions = filteredTransactions,
+                                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                     onUpdateTransactions = { updatedTransactions ->
                                         viewModel.updateTransactions(updatedTransactions)
                                         saveTransactionsToStorage(updatedTransactions)
@@ -165,12 +167,14 @@ class ExpenseTransactionActivity : ComponentActivity() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
     }
 }
+
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpenseTransactionScreen(
     categoryName: String,
     initialTransactions: List<Transaction>,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onUpdateTransactions: (List<Transaction>) -> Unit,
     viewModel: ExpenseViewModel = viewModel()
 ) {
@@ -225,6 +229,7 @@ fun ExpenseTransactionScreen(
         if (showMenuDialog && selectedTransaction != null) {
             EditDeleteDialog(
                 transaction = selectedTransaction!!,
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismiss = { showMenuDialog = false },
                 onEdit = {
                     showMenuDialog = false
@@ -239,6 +244,7 @@ fun ExpenseTransactionScreen(
         if (showEditDialog && selectedTransaction != null) {
             EditTransactionDialog(
                 transaction = selectedTransaction!!,
+                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                 onDismiss = { showEditDialog = false },
                 onSave = { updatedTransaction ->
                     viewModel.updateTransaction(updatedTransaction)
@@ -281,7 +287,7 @@ fun ExpenseTransactionScreen(
                 color = Color.White
             )
             Text(
-                text = "${totalExpenseForFilteredTransactions.formatAmount(2)} грн",
+                text = "${totalExpenseForFilteredTransactions.formatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 color = Color.Red // Червоний колір для загальної суми
             )
@@ -570,6 +576,7 @@ fun TransactionItem(
 @Composable
 fun EditDeleteDialog(
     transaction: Transaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -598,6 +605,11 @@ fun EditDeleteDialog(
                 style = MaterialTheme.typography.titleMedium.copy(color = Color.White),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            Text(
+                text = "Сума: ${transaction.amount} $selectedCurrency", // Використовуємо вибрану валюту
+                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
             Button(
                 onClick = onEdit,
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -620,6 +632,7 @@ fun EditDeleteDialog(
 @Composable
 fun EditTransactionDialog(
     transaction: Transaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onDismiss: () -> Unit,
     onSave: (Transaction) -> Unit
 ) {
@@ -651,7 +664,7 @@ fun EditTransactionDialog(
                 TextField(
                     value = updatedAmount,
                     onValueChange = { updatedAmount = it },
-                    label = { Text("Сума", style = TextStyle(color = Color.White)) },
+                    label = { Text("Сума ($selectedCurrency)", style = TextStyle(color = Color.White)) }, // Використовуємо вибрану валюту
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     textStyle = TextStyle(color = Color.White, fontWeight = FontWeight.Bold), // Білий жирний шрифт
                     colors = TextFieldDefaults.textFieldColors(
