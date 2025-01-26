@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -56,6 +57,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 class AllTransactionExpenseActivity : ComponentActivity() {
     private val viewModel: ExpenseViewModel by viewModels { ExpenseViewModelFactory(application) }
     private lateinit var updateReceiver: BroadcastReceiver
+    private lateinit var sharedPreferences: SharedPreferences
 
     private fun <T> navigateToActivity(activityClass: Class<T>) {
         val intent = Intent(this, activityClass)
@@ -66,6 +68,9 @@ class AllTransactionExpenseActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
+        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+
         setContent {
             HomeAccountingAppTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -117,8 +122,8 @@ class AllTransactionExpenseActivity : ComponentActivity() {
                                     )
                                     .padding(innerPadding)
                             ) {
-                                AllTransactionExpenseScreen(viewModel)
-                                ExpensePeriodButton(viewModel, Modifier.align(Alignment.BottomStart).padding(16.dp))
+                                AllTransactionExpenseScreen(viewModel, selectedCurrency)
+                                ExpensePeriodButton(viewModel, selectedCurrency, Modifier.align(Alignment.BottomStart).padding(16.dp))
                             }
                         }
                     )
@@ -145,7 +150,7 @@ class AllTransactionExpenseActivity : ComponentActivity() {
 }
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun ExpensePeriodButton(viewModel: ExpenseViewModel, modifier: Modifier = Modifier) {
+fun ExpensePeriodButton(viewModel: ExpenseViewModel, selectedCurrency: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val dialogState = remember { mutableStateOf(false) }
     val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -278,6 +283,7 @@ fun SortMenu(viewModel: ExpenseViewModel) {
 @Composable
 fun AllTransactionExpenseScreen(
     viewModel: ExpenseViewModel = viewModel(),
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     modifier: Modifier = Modifier
 ) {
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
@@ -308,6 +314,7 @@ fun AllTransactionExpenseScreen(
                             items(transactions) { transaction ->
                                 AllExpenseTransactionItem(
                                     transaction = transaction,
+                                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                     onClick = {
                                         selectedTransaction = transaction
                                         showMenuDialog = true
@@ -317,7 +324,7 @@ fun AllTransactionExpenseScreen(
                             item {
                                 val totalGroupExpense = transactions.sumOf { it.amount }
                                 Text(
-                                    text = "Сума за $date: $totalGroupExpense грн",
+                                    text = "Сума за $date: $totalGroupExpense $selectedCurrency", // Використовуємо вибрану валюту
                                     style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = Color.White),
                                     modifier = Modifier.padding(padding)
                                 )
@@ -329,6 +336,7 @@ fun AllTransactionExpenseScreen(
                         items(sortedTransactions) { transaction ->
                             AllExpenseTransactionItem(
                                 transaction = transaction,
+                                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                 onClick = {
                                     selectedTransaction = transaction
                                     showMenuDialog = true
@@ -342,6 +350,7 @@ fun AllTransactionExpenseScreen(
                             items(transactions) { transaction ->
                                 AllExpenseTransactionItem(
                                     transaction = transaction,
+                                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                     onClick = {
                                         selectedTransaction = transaction
                                         showMenuDialog = true
@@ -351,7 +360,7 @@ fun AllTransactionExpenseScreen(
                             item {
                                 val totalGroupExpense = transactions.sumOf { it.amount }
                                 Text(
-                                    text = "Всього витрат по категорії: $totalGroupExpense грн",
+                                    text = "Всього витрат по категорії: $totalGroupExpense $selectedCurrency", // Використовуємо вибрану валюту
                                     style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = Color.White),
                                     modifier = Modifier.padding(padding)
                                 )
@@ -364,6 +373,7 @@ fun AllTransactionExpenseScreen(
             if (showMenuDialog && selectedTransaction != null) {
                 EditDeleteDialog(
                     transaction = selectedTransaction!!,
+                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                     onDismiss = { showMenuDialog = false },
                     onEdit = {
                         showMenuDialog = false
@@ -378,6 +388,7 @@ fun AllTransactionExpenseScreen(
             if (showEditDialog && selectedTransaction != null) {
                 EditTransactionDialog(
                     transaction = selectedTransaction!!,
+                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                     onDismiss = { showEditDialog = false },
                     onSave = { updatedTransaction ->
                         viewModel.updateTransaction(updatedTransaction)
@@ -392,6 +403,7 @@ fun AllTransactionExpenseScreen(
 @Composable
 fun AllExpenseTransactionItem(
     transaction: Transaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onClick: () -> Unit
 ) {
     BoxWithConstraints {
@@ -424,7 +436,7 @@ fun AllExpenseTransactionItem(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Сума: ${if (transaction.amount < 0) "" else "-"}${transaction.amount} грн",
+                    text = "Сума: ${if (transaction.amount < 0) "" else "-"}${transaction.amount} $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.bodyLarge.copy(color = Color.Red, fontSize = fontSize),
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
