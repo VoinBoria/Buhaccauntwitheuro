@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -51,6 +52,7 @@ import java.util.*
 class AllTransactionIncomeActivity : ComponentActivity() {
     private val viewModel: IncomeViewModel by viewModels { IncomeViewModelFactory(application) }
     private lateinit var updateReceiver: BroadcastReceiver
+    private lateinit var sharedPreferences: SharedPreferences
 
     private fun <T> navigateToActivity(activityClass: Class<T>) {
         val intent = Intent(this, activityClass)
@@ -61,6 +63,9 @@ class AllTransactionIncomeActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
+        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
+
         setContent {
             HomeAccountingAppTheme {
                 val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -90,9 +95,7 @@ class AllTransactionIncomeActivity : ComponentActivity() {
                     Scaffold(
                         topBar = {
                             TopAppBar(
-                                title = {
-                                    Text("Всі транзакції доходів", color = White)
-                                },
+                                title = { Text("Всі транзакції доходів", color = White) },
                                 navigationIcon = {
                                     IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                         Icon(Icons.Default.Menu, contentDescription = "Меню", tint = White)
@@ -114,11 +117,7 @@ class AllTransactionIncomeActivity : ComponentActivity() {
                                     )
                                     .padding(innerPadding)
                             ) {
-                                AllTransactionIncomeScreen(
-                                    viewModel = viewModel,
-                                    onDeleteTransaction = { transaction -> deleteTransaction(transaction) },
-                                    onUpdateTransaction = { transaction -> updateTransaction(transaction) }
-                                )
+                                AllTransactionIncomeScreen(viewModel, selectedCurrency, ::sendUpdateBroadcast)
                                 PeriodButton(viewModel, Modifier.align(Alignment.BottomStart).padding(16.dp))
                             }
                         }
@@ -127,6 +126,7 @@ class AllTransactionIncomeActivity : ComponentActivity() {
             }
         }
 
+        // Ініціалізація BroadcastReceiver для оновлення даних
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "com.example.homeaccountingapp.UPDATE_INCOME") {
@@ -148,14 +148,10 @@ class AllTransactionIncomeActivity : ComponentActivity() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
     }
 
-    private fun deleteTransaction(transaction: IncomeTransaction) {
-        viewModel.deleteTransaction(transaction)
-        sendUpdateBroadcast() // Відправка повідомлення про оновлення
-    }
-
-    private fun updateTransaction(updatedTransaction: IncomeTransaction) {
-        viewModel.updateTransaction(updatedTransaction)
-        sendUpdateBroadcast() // Відправка повідомлення про оновлення
+    // Викликайте цю функцію після додавання, редагування або видалення транзакції
+    private fun updateTransaction(transaction: IncomeTransaction) {
+        viewModel.updateTransaction(transaction)
+        sendUpdateBroadcast()
     }
 }
 @RequiresApi(Build.VERSION_CODES.O)
@@ -289,12 +285,13 @@ fun SortMenu(viewModel: IncomeViewModel) {
     }
 }
 @SuppressLint("UnusedBoxWithConstraintsScope")
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AllTransactionIncomeScreen(
     viewModel: IncomeViewModel = viewModel(),
-    modifier: Modifier = Modifier,
-    onDeleteTransaction: (IncomeTransaction) -> Unit,
-    onUpdateTransaction: (IncomeTransaction) -> Unit
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
+    sendUpdateBroadcast: () -> Unit, // Додаємо параметр для відправки оновлень
+    modifier: Modifier = Modifier
 ) {
     var selectedTransaction by remember { mutableStateOf<IncomeTransaction?>(null) }
     var showMenuDialog by remember { mutableStateOf(false) }
@@ -311,66 +308,71 @@ fun AllTransactionIncomeScreen(
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            LazyColumn(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(start = padding, end = padding, top = padding, bottom = 70.dp) // Зменшена висота транзакцій
-                    .background(Color.Transparent) // Зробити фон прозорим
-            ) {
-                when (viewModel.sortType) {
-                    SortType.DATE -> {
-                        val groupedTransactions = incomeTransactions.groupBy { it.date }
-                        groupedTransactions.toSortedMap(compareByDescending { it }).forEach { (date, transactions) ->
-                            items(transactions) { transaction ->
-                                AllIncomeTransactionItem(
-                                    transaction = transaction,
-                                    onClick = {
-                                        selectedTransaction = transaction
-                                        showMenuDialog = true
-                                    }
-                                )
-                            }
-                            item {
-                                val totalGroupIncome = transactions.sumOf { it.amount }
-                                Text(
-                                    text = "Сума за $date: $totalGroupIncome грн",
-                                    style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = White),
-                                    modifier = Modifier.padding(padding)
-                                )
-                            }
-                        }
-                    }
-                    SortType.AMOUNT -> {
-                        val sortedTransactions = incomeTransactions.sortedByDescending { it.amount }
-                        items(sortedTransactions) { transaction ->
-                            AllIncomeTransactionItem(
-                                transaction = transaction,
-                                onClick = {
-                                    selectedTransaction = transaction
-                                    showMenuDialog = true
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f)
+                        .padding(start = padding, end = padding, top = padding, bottom = 70.dp) // Додавання відступу знизу для уникнення налазання під напис
+                ) {
+                    when (viewModel.sortType) {
+                        SortType.DATE -> {
+                            val groupedTransactions = incomeTransactions.groupBy { it.date }
+                            groupedTransactions.toSortedMap(compareByDescending { it }).forEach { (date, transactions) ->
+                                items(transactions) { transaction ->
+                                    AllIncomeTransactionItem(
+                                        transaction = transaction,
+                                        selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
+                                        onClick = {
+                                            selectedTransaction = transaction
+                                            showMenuDialog = true
+                                        }
+                                    )
                                 }
-                            )
+                                item {
+                                    val totalGroupIncome = transactions.sumOf { it.amount }
+                                    Text(
+                                        text = "Сума за $date: $totalGroupIncome $selectedCurrency", // Використовуємо вибрану валюту
+                                        style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = Color.White),
+                                        modifier = Modifier.padding(padding)
+                                    )
+                                }
+                            }
                         }
-                    }
-                    SortType.CATEGORY -> {
-                        val groupedTransactions = incomeTransactions.groupBy { it.category }
-                        groupedTransactions.forEach { (_, transactions) ->
-                            items(transactions) { transaction ->
+                        SortType.AMOUNT -> {
+                            val sortedTransactions = incomeTransactions.sortedByDescending { it.amount }
+                            items(sortedTransactions) { transaction ->
                                 AllIncomeTransactionItem(
                                     transaction = transaction,
+                                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                     onClick = {
                                         selectedTransaction = transaction
                                         showMenuDialog = true
                                     }
                                 )
                             }
-                            item {
-                                val totalGroupIncome = transactions.sumOf { it.amount }
-                                Text(
-                                    text = "Всього доходів по категорії: $totalGroupIncome грн",
-                                    style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = White),
-                                    modifier = Modifier.padding(padding)
-                                )
+                        }
+                        SortType.CATEGORY -> {
+                            val groupedTransactions = incomeTransactions.groupBy { it.category }
+                            groupedTransactions.forEach { (_, transactions) ->
+                                items(transactions) { transaction ->
+                                    AllIncomeTransactionItem(
+                                        transaction = transaction,
+                                        selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
+                                        onClick = {
+                                            selectedTransaction = transaction
+                                            showMenuDialog = true
+                                        }
+                                    )
+                                }
+                                item {
+                                    val totalGroupIncome = transactions.sumOf { it.amount }
+                                    Text(
+                                        text = "Всього доходів по категорії: $totalGroupIncome $selectedCurrency", // Використовуємо вибрану валюту
+                                        style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Normal, color = Color.White),
+                                        modifier = Modifier.padding(padding)
+                                    )
+                                }
                             }
                         }
                     }
@@ -380,13 +382,15 @@ fun AllTransactionIncomeScreen(
             if (showMenuDialog && selectedTransaction != null) {
                 IncomeEditDeleteDialog(
                     transaction = selectedTransaction!!,
+                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                     onDismiss = { showMenuDialog = false },
                     onEdit = {
                         showMenuDialog = false
                         showEditDialog = true
                     },
                     onDelete = {
-                        onDeleteTransaction(selectedTransaction!!) // Виклик onDeleteTransaction
+                        viewModel.deleteTransaction(selectedTransaction!!)
+                        sendUpdateBroadcast() // Викликаємо sendUpdateBroadcast
                         showMenuDialog = false
                     }
                 )
@@ -394,9 +398,11 @@ fun AllTransactionIncomeScreen(
             if (showEditDialog && selectedTransaction != null) {
                 IncomeEditTransactionDialog(
                     transaction = selectedTransaction!!,
+                    selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                     onDismiss = { showEditDialog = false },
                     onSave = { updatedTransaction ->
-                        onUpdateTransaction(updatedTransaction) // Виклик onUpdateTransaction
+                        viewModel.updateTransaction(updatedTransaction)
+                        sendUpdateBroadcast() // Викликаємо sendUpdateBroadcast
                         showEditDialog = false
                     }
                 )
@@ -408,6 +414,7 @@ fun AllTransactionIncomeScreen(
 @Composable
 fun AllIncomeTransactionItem(
     transaction: IncomeTransaction,
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onClick: () -> Unit
 ) {
     BoxWithConstraints {
@@ -440,7 +447,7 @@ fun AllIncomeTransactionItem(
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
                 Text(
-                    text = "Сума: ${transaction.amount} грн",
+                    text = "Сума: ${transaction.amount} $selectedCurrency", // Використовуємо вибрану валюту
                     style = MaterialTheme.typography.bodyLarge.copy(color = Color.Green, fontSize = fontSize),
                     modifier = Modifier.padding(bottom = 4.dp)
                 )
