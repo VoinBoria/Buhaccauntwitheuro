@@ -207,7 +207,9 @@ class IncomeActivity : ComponentActivity() {
             viewModel.saveCategories(defaultCategories)
             defaultCategories
         }
-        viewModel.updateCategories(categoriesList)  // Оновлення категорій в ViewModel
+        categoriesList.forEach { category ->
+            viewModel.addCategory(category)
+        }
     }
 
     override fun onDestroy() {
@@ -249,7 +251,7 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
             IncomeTransactions = currentTransactions
             saveTransactionsToPreferences(currentTransactions)
             sortTransactions(sortType)
-            sendUpdateBroadcast?.invoke() // Використання ?.invoke() для безпечного виклику
+            sendUpdateBroadcast?.invoke()
         }
     }
 
@@ -263,7 +265,7 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
             IncomeTransactions = currentTransactions
             saveTransactionsToPreferences(currentTransactions)
             sortTransactions(sortType)
-            sendUpdateBroadcast?.invoke() // Використання ?.invoke() для безпечного виклику
+            sendUpdateBroadcast?.invoke()
         }
     }
 
@@ -332,8 +334,8 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun updateIncomes(Incomes: Map<String, Double> = emptyMap()) {
-        categoryIncomes = Incomes.takeIf { it.isNotEmpty() }
+    fun updateIncomes(incomes: Map<String, Double> = emptyMap()) {
+        categoryIncomes = incomes.takeIf { it.isNotEmpty() }
             ?: categories.associateWith { category ->
                 IncomeTransactions.filter { it.category == category }.sumOf { it.amount }
             }
@@ -341,16 +343,18 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
         saveIncomesToSharedPreferences(categoryIncomes)
     }
 
-    fun updateCategories(newCategories: List<String>) {
-        categories = newCategories
-        saveCategories(categories)
-        updateIncomes()
-        sendUpdateBroadcast?.invoke()
+    fun addCategory(newCategory: String) {
+        if (newCategory !in categories) {
+            categories = categories + newCategory
+            saveCategories(categories)
+            updateIncomes()
+            sendUpdateBroadcast?.invoke()
+        }
     }
 
     fun updateIncomeTransactions(newTransaction: IncomeTransaction) {
         viewModelScope.launch {
-            val currentTransactions = loadIncomeTransactions().toMutableList()
+            val currentTransactions = IncomeTransactions.toMutableList()
             currentTransactions.add(newTransaction)
             IncomeTransactions = currentTransactions
             saveTransactionsToPreferences(currentTransactions)
@@ -387,12 +391,14 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun saveCategories(categories: List<String>) {
-        incomesharedPreferences.edit().putString("categories", gson.toJson(categories)).apply()
+        val editor = incomesharedPreferences.edit()
+        val categoriesJson = gson.toJson(categories)
+        editor.putString("categories", categoriesJson).apply()
         sendUpdateBroadcast?.invoke()
     }
 
-    private fun saveIncomeTransactions(IncomeTransactions: List<IncomeTransaction>) {
-        incomesharedPreferences.edit().putString("IncomeTransactions", gson.toJson(IncomeTransactions)).apply()
+    private fun saveIncomeTransactions(incomeTransactions: List<IncomeTransaction>) {
+        incomesharedPreferences.edit().putString("IncomeTransactions", gson.toJson(incomeTransactions)).apply()
         sendUpdateBroadcast?.invoke()
     }
 
@@ -418,10 +424,6 @@ class IncomeViewModel(application: Application) : AndroidViewModel(application) 
         val incomesJson = gson.toJson(incomes)
         incomesharedPreferences.edit().putString("incomes", incomesJson).apply()
     }
-
-    companion object {
-        private const val TAG = "IncomeViewModel"
-    }
 }
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
@@ -431,23 +433,23 @@ fun IncomeScreen(
     onincomeDeleteCategory: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showIncomeAddIncomeTransactionDialog by remember { mutableStateOf(false) }
+    var showIncomeAddCategoryDialog by remember { mutableStateOf(false) }
+    var showIncomeEditCategoryDialog by remember { mutableStateOf(false) }
+    var categoryToEdit by remember { mutableStateOf<String?>(null) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
+    var categoryToDelete by remember { mutableStateOf<String?>(null) }
+
     BoxWithConstraints {
         val screenWidth = maxWidth
         val fontSize = if (screenWidth < 360.dp) 14.sp else 18.sp
         val padding = if (screenWidth < 360.dp) 8.dp else 16.dp
 
         val categories = viewModel.categories
-        val IncomeTransactions = viewModel.IncomeTransactions
+        val incomeTransactions = viewModel.IncomeTransactions
         val categoryIncomes = viewModel.categoryIncomes
         val totalIncome = viewModel.totalIncome
-
-        var showIncomeEditCategoryDialog by remember { mutableStateOf(false) }
-        var categoryToEdit by remember { mutableStateOf<String?>(null) }
-        var showMenu by remember { mutableStateOf(false) }
-        var showIncomeAddIncomeTransactionDialog by remember { mutableStateOf(false) }
-        var showIncomeAddCategoryDialog by remember { mutableStateOf(false) }
-        var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
-        var categoryToDelete by remember { mutableStateOf<String?>(null) }
 
         Box(modifier = Modifier.fillMaxSize()) {
             Image(
@@ -475,7 +477,7 @@ fun IncomeScreen(
                                 category = category,
                                 IncomeAmount = categoryIncomes[category] ?: 0.0,
                                 onClick = {
-                                    onOpenIncomeTransactionScreen(category, Gson().toJson(IncomeTransactions))
+                                    onOpenIncomeTransactionScreen(category, Gson().toJson(incomeTransactions))
                                 },
                                 onDelete = {
                                     categoryToDelete = category
@@ -538,102 +540,87 @@ fun IncomeScreen(
                     }
                 }
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(30.dp)
-            ) {
-                Text(
-                    text = "Загальні Доходи:",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Text(
-                    text = "${totalIncome.incomeFormatAmount(2)} грн",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White
-                )
-            }
-        }
-        if (showDeleteConfirmationDialog) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable { showDeleteConfirmationDialog = false }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .background(Color(0xFF1A1A1A).copy(alpha = 0.9f), shape = RoundedCornerShape(12.dp))
-                        .padding(16.dp)
-                        .widthIn(max = if (screenWidth < 360.dp) 250.dp else 300.dp)
-                ) {
-                    Text(
-                        text = "Ви впевнені, що хочете видалити цю категорію?",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(
-                            onClick = {
-                                showDeleteConfirmationDialog = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4682B4))
-                        ) {
-                            Text("Ні", color = Color.White)
-                        }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Button(
-                            onClick = {
-                                categoryToDelete?.let {
-                                    viewModel.incomeDeleteCategory(it)
-                                }
-                                showDeleteConfirmationDialog = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B0000))
-                        ) {
-                            Text("Так", color = Color.White)
-                        }
+            if (showIncomeAddIncomeTransactionDialog) {
+                IncomeAddIncomeTransactionDialog(
+                    categories = categories,
+                    onDismiss = { showIncomeAddIncomeTransactionDialog = false },
+                    onSave = { incomeTransaction ->
+                        viewModel.updateIncomeTransactions(incomeTransaction)
+                        showIncomeAddIncomeTransactionDialog = false
+                    },
+                    onAddCategory = { newCategory ->
+                        viewModel.addCategory(newCategory)
                     }
-                }
+                )
             }
-        }
-        if (showIncomeAddIncomeTransactionDialog) {
-            IncomeAddIncomeTransactionDialog(
-                categories = categories,
-                onDismiss = { showIncomeAddIncomeTransactionDialog = false },
-                onSave = { IncomeTransaction ->
-                    viewModel.updateIncomeTransactions(IncomeTransaction)
-                    showIncomeAddIncomeTransactionDialog = false
-                }
-            )
-        }
-        if (showIncomeAddCategoryDialog) {
-            IncomeAddCategoryDialog(
-                onDismiss = { showIncomeAddCategoryDialog = false },
-                onSave = { newCategory ->
-                    viewModel.updateCategories(categories + newCategory)
-                    showIncomeAddCategoryDialog = false
-                }
-            )
-        }
-        if (showIncomeEditCategoryDialog) {
-            categoryToEdit?.let { oldCategory ->
-                IncomeEditCategoryDialog(
-                    oldCategoryName = oldCategory,
-                    onDismiss = { showIncomeEditCategoryDialog = false },
+            if (showIncomeAddCategoryDialog) {
+                IncomeAddCategoryDialog(
+                    onDismiss = { showIncomeAddCategoryDialog = false },
                     onSave = { newCategory ->
-                        viewModel.IncomeEditCategory(oldCategory, newCategory)
-                        showIncomeEditCategoryDialog = false
+                        viewModel.addCategory(newCategory)
+                        showIncomeAddCategoryDialog = false
                     }
                 )
+            }
+            if (showIncomeEditCategoryDialog) {
+                categoryToEdit?.let { oldCategory ->
+                    IncomeEditCategoryDialog(
+                        oldCategoryName = oldCategory,
+                        onDismiss = { showIncomeEditCategoryDialog = false },
+                        onSave = { newCategory ->
+                            viewModel.IncomeEditCategory(oldCategory, newCategory)
+                            showIncomeEditCategoryDialog = false
+                        }
+                    )
+                }
+            }
+            if (showDeleteConfirmationDialog) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clickable { showDeleteConfirmationDialog = false }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .background(Color(0xFF1A1A1A).copy(alpha = 0.9f), shape = RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                            .widthIn(max = if (screenWidth < 360.dp) 250.dp else 300.dp)
+                    ) {
+                        Text(
+                            text = "Ви впевнені, що хочете видалити цю категорію?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(
+                                onClick = {
+                                    showDeleteConfirmationDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4682B4))
+                            ) {
+                                Text("Ні", color = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Button(
+                                onClick = {
+                                    categoryToDelete?.let {
+                                        viewModel.incomeDeleteCategory(it)
+                                    }
+                                    showDeleteConfirmationDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B0000))
+                            ) {
+                                Text("Так", color = Color.White)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -854,7 +841,8 @@ fun IncomeAddCategoryDialog(
 fun IncomeAddIncomeTransactionDialog(
     categories: List<String>,
     onDismiss: () -> Unit,
-    onSave: (IncomeTransaction) -> Unit
+    onSave: (IncomeTransaction) -> Unit,
+    onAddCategory: (String) -> Unit // Додано колбек для додавання категорії
 ) {
     val today = remember {
         val calendar = Calendar.getInstance()
@@ -866,6 +854,7 @@ fun IncomeAddIncomeTransactionDialog(
     var comment by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) } // Додано стан для показу діалогу додавання категорії
 
     val context = LocalContext.current
 
@@ -886,7 +875,7 @@ fun IncomeAddIncomeTransactionDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.8f)) // Більш прозорий чорний фон
+            .background(Color.Black.copy(alpha = 0.8f))
             .clickable(enabled = true, onClick = {})
             .zIndex(1f),
     ) {
@@ -894,14 +883,14 @@ fun IncomeAddIncomeTransactionDialog(
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(16.dp)
-                .border(2.dp, Color.White, RoundedCornerShape(8.dp)) // Додаємо білу рамку
+                .border(2.dp, Color.White, RoundedCornerShape(8.dp))
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(Color.Gray.copy(alpha = 0.8f), Color.Black.copy(alpha = 0.8f))
                     ),
                     shape = RoundedCornerShape(8.dp)
                 )
-                .widthIn(max = 300.dp) // Зробити меню вужчим
+                .widthIn(max = 300.dp)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -909,7 +898,7 @@ fun IncomeAddIncomeTransactionDialog(
                 text = "Додати дохід",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.Green // Зелений заголовок для кращого контрасту
+                    color = Color.Green
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -933,11 +922,11 @@ fun IncomeAddIncomeTransactionDialog(
                     cursorColor = Color.White,
                     focusedLabelColor = Color.White,
                     unfocusedLabelColor = Color.Gray,
-                    containerColor = Color.Transparent, // Прозорий фон для поля вводу
+                    containerColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold), // Білий і жирний текст
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold),
                 keyboardOptions = KeyboardOptions.Default.copy(
                     keyboardType = KeyboardType.Decimal
                 )
@@ -948,12 +937,12 @@ fun IncomeAddIncomeTransactionDialog(
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow) // Жовта кнопка вибору дати
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow)
             ) {
                 Text(
                     text = "Дата: $date",
                     color = Color.Black,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) // Чорний жирний текст
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
             ExposedDropdownMenuBox(
@@ -978,7 +967,7 @@ fun IncomeAddIncomeTransactionDialog(
                         unfocusedLabelColor = Color.Gray,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        containerColor = Color.Transparent // Прозорий фон для поля вводу
+                        containerColor = Color.Transparent
                     ),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
                 )
@@ -998,31 +987,27 @@ fun IncomeAddIncomeTransactionDialog(
                             onClick = {
                                 selectedCategory = category
                                 isDropdownExpanded = false
-                            },
-                            modifier = Modifier.background(Color.DarkGray)
+                            }
                         )
                     }
                     DropdownMenuItem(
                         text = {
                             Text(
                                 text = "Додати категорію",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp // Збільшення розміру шрифту для кращої читабельності
+                                color = Color.White
                             )
                         },
-                        modifier = Modifier
-                            .background(Color.DarkGray)
-                            .border(2.dp, Color.White, RoundedCornerShape(8.dp)) // Додаємо білу рамку
-                            .padding(8.dp),
-                        onClick = {}
+                        onClick = {
+                            isDropdownExpanded = false
+                            showAddCategoryDialog = true // Показ діалогу додавання категорії
+                        }
                     )
                 }
             }
             OutlinedTextField(
                 value = comment,
-                onValueChange = { comment = it.takeIf { it.isNotBlank() } ?: "" },
-                label = { Text("Коментар", color = Color.Gray) },
+                onValueChange = { comment = it },
+                label = { Text("Коментар", color = Color.White) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
@@ -1033,41 +1018,56 @@ fun IncomeAddIncomeTransactionDialog(
                     cursorColor = Color.White,
                     focusedLabelColor = Color.White,
                     unfocusedLabelColor = Color.Gray,
-                    containerColor = Color.Transparent, // Прозорий фон для поля вводу
+                    containerColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold) // Білий і жирний текст
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
             )
-            Spacer(modifier = Modifier.height(8.dp))
             Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Скасувати", color = Color.Red, fontWeight = FontWeight.Bold) // Білий жирний текст
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                TextButton(
+                Button(
                     onClick = {
-                        val transaction = IncomeTransaction(
-                            id = UUID.randomUUID().toString(),
-                            amount = amount.toDoubleOrNull() ?: 0.0,
-                            date = date,
-                            category = selectedCategory,
-                            comments = comment.takeIf { it.isNotBlank() } // Використання takeIf для comments
-                        )
-                        onSave(transaction)
+                        if (amount.isNotBlank() && selectedCategory.isNotBlank()) {
+                            onSave(
+                                IncomeTransaction(
+                                    id = UUID.randomUUID().toString(),
+                                    amount = amount.toDouble(),
+                                    category = selectedCategory,
+                                    date = date,
+                                    comments = comment.takeIf { it.isNotBlank() } // Використання takeIf для comments
+                                )
+                            )
+                            onDismiss()
+                        }
                     },
-                    modifier = Modifier.weight(1f)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
                 ) {
-                    Text("Зберегти", color = Color.Green, fontWeight = FontWeight.Bold) // Білий жирний текст
+                    Text("Зберегти", color = Color.White)
+                }
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Скасувати", color = Color.White)
                 }
             }
         }
+    }
+
+    if (showAddCategoryDialog) {
+        IncomeAddCategoryDialog(
+            onDismiss = { showAddCategoryDialog = false },
+            onSave = { newCategory ->
+                onAddCategory(newCategory)
+                selectedCategory = newCategory
+                showAddCategoryDialog = false
+            }
+        )
     }
 }
 data class IncomeTransaction(
