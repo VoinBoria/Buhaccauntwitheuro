@@ -228,6 +228,7 @@ class ExpenseActivity : ComponentActivity() {
     }
 }
 
+
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPreferences = application.getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
     private val gson = Gson()
@@ -253,6 +254,14 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     // Метод для встановлення функції
     fun setSendUpdateBroadcast(sendUpdateBroadcast: () -> Unit) {
         this.sendUpdateBroadcast = sendUpdateBroadcast
+    }
+    fun addCategory(newCategory: String) {
+        if (newCategory !in categories) {
+            categories = categories + newCategory
+            saveCategories(categories)
+            updateExpenses()
+            sendUpdateBroadcast()
+        }
     }
 
     // Додайте цю функцію для відправки broadcast
@@ -409,6 +418,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         editor.putString("expenses", expensesJson)
         editor.apply()
     }
+
 
     // Функція для оновлення транзакції
     fun updateTransaction(updatedTransaction: Transaction) {
@@ -626,6 +636,9 @@ fun ExpenseScreen(
                 onSave = { transaction ->
                     viewModel.addTransaction(transaction)
                     showAddTransactionDialog = false
+                },
+                onAddCategory = { newCategory ->
+                    viewModel.addCategory(newCategory) // Виклик методу для додавання нової категорії
                 }
             )
         }
@@ -873,7 +886,8 @@ fun AddCategoryDialog(
 fun AddTransactionDialog(
     categories: List<String>,
     onDismiss: () -> Unit,
-    onSave: (Transaction) -> Unit
+    onSave: (Transaction) -> Unit, // Явно вказуємо тип параметра
+    onAddCategory: (String) -> Unit // Колбек для додавання нової категорії
 ) {
     val today = remember {
         val calendar = Calendar.getInstance()
@@ -885,6 +899,7 @@ fun AddTransactionDialog(
     var comment by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
     var isDropdownExpanded by remember { mutableStateOf(false) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) } // Додано стан для показу діалогу додавання категорії
 
     val context = LocalContext.current
 
@@ -913,14 +928,14 @@ fun AddTransactionDialog(
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(16.dp)
-                .border(2.dp, Color.White, RoundedCornerShape(8.dp)) // Додаємо білу рамку
+                .border(2.dp, Color.White, RoundedCornerShape(8.dp))
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(Color.Gray.copy(alpha = 0.8f), Color.Black.copy(alpha = 0.8f))
                     ),
                     shape = RoundedCornerShape(8.dp)
                 )
-                .widthIn(max = 300.dp) // Зробити меню вужчим
+                .widthIn(max = 300.dp)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -928,7 +943,7 @@ fun AddTransactionDialog(
                 text = "Додати витрату",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White // Білий заголовок для кращого контрасту
+                    color = Color.White
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -952,11 +967,11 @@ fun AddTransactionDialog(
                     cursorColor = Color.White,
                     focusedLabelColor = Color.White,
                     unfocusedLabelColor = Color.Gray,
-                    containerColor = Color.Transparent, // Прозорий фон для поля вводу
+                    containerColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold) // Білий і жирний текст
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
             )
             Button(
                 onClick = { showDatePicker = true },
@@ -964,12 +979,12 @@ fun AddTransactionDialog(
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow) // Жовта кнопка вибору дати
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow)
             ) {
                 Text(
                     text = "Дата: $date",
                     color = Color.Black,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold) // Чорний жирний текст
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
             ExposedDropdownMenuBox(
@@ -994,7 +1009,7 @@ fun AddTransactionDialog(
                         unfocusedLabelColor = Color.Gray,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White,
-                        containerColor = Color.Transparent // Прозорий фон для поля вводу
+                        containerColor = Color.Transparent
                     ),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
                 )
@@ -1014,10 +1029,21 @@ fun AddTransactionDialog(
                             onClick = {
                                 selectedCategory = category
                                 isDropdownExpanded = false
-                            },
-                            modifier = Modifier.background(Color.DarkGray)
+                            }
                         )
                     }
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Додати категорію",
+                                color = Color.White
+                            )
+                        },
+                        onClick = {
+                            isDropdownExpanded = false
+                            showAddCategoryDialog = true // Показ діалогу додавання категорії
+                        }
+                    )
                 }
             }
             OutlinedTextField(
@@ -1027,48 +1053,63 @@ fun AddTransactionDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
-                singleLine = true,
+                singleLine = false,
                 colors = TextFieldDefaults.outlinedTextFieldColors(
                     focusedBorderColor = Color.White,
                     unfocusedBorderColor = Color.Gray,
                     cursorColor = Color.White,
                     focusedLabelColor = Color.White,
                     unfocusedLabelColor = Color.Gray,
-                    containerColor = Color.Transparent, // Прозорий фон для поля вводу
+                    containerColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White
                 ),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold) // Білий і жирний текст
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White, fontWeight = FontWeight.Bold)
             )
-            Spacer(modifier = Modifier.height(16.dp))
             Row(
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                TextButton(onClick = onDismiss) {
-                    Text("Скасувати", color = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(16.dp))
                 Button(
                     onClick = {
                         if (amount.isNotBlank() && selectedCategory.isNotBlank()) {
-                            val transaction = Transaction(
-                                id = UUID.randomUUID().toString(),
-                                amount = -amount.toDouble(), // Витрати мають бути від'ємні
-                                category = selectedCategory,
-                                date = LocalDate.now().toString(),
-                                comments = comment
+                            onSave(
+                                Transaction(
+                                    id = UUID.randomUUID().toString(),
+                                    amount = amount.toDouble(),
+                                    category = selectedCategory,
+                                    date = date,
+                                    comments = comment.takeIf { it.isNotBlank() } // Використання takeIf для comments
+                                )
                             )
-                            onSave(transaction)
+                            onDismiss()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
                 ) {
                     Text("Зберегти", color = Color.White)
                 }
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Скасувати", color = Color.White)
+                }
             }
         }
+    }
+
+    if (showAddCategoryDialog) {
+        AddCategoryDialog(
+            onDismiss = { showAddCategoryDialog = false },
+            onSave = { newCategory ->
+                onAddCategory(newCategory)
+                selectedCategory = newCategory
+                showAddCategoryDialog = false
+            }
+        )
     }
 }
 data class Transaction(
