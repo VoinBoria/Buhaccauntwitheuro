@@ -51,15 +51,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.AndroidViewModel
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.compose.ui.zIndex
@@ -69,12 +65,10 @@ import com.google.accompanist.pager.rememberPagerState
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
     private lateinit var updateReceiver: BroadcastReceiver
-    private lateinit var sharedPreferences: SharedPreferences
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
         setContent {
             HomeAccountingAppTheme {
                 val showSplashScreen = intent.getBooleanExtra("SHOW_SPLASH_SCREEN", true)
@@ -93,12 +87,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Ініціалізація BroadcastReceiver для отримання оновлень
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES" ||
-                    intent.action == "com.example.homeaccountingapp.UPDATE_INCOME" ||
-                    intent.action == "com.example.homeaccountingapp.UPDATE_CURRENCY") {
+                    intent.action == "com.example.homeaccountingapp.UPDATE_INCOME") {
                     viewModel.refreshExpenses()
                     viewModel.refreshIncomes()
                     viewModel.refreshCategories() // Оновлення категорій
@@ -108,7 +100,6 @@ class MainActivity : ComponentActivity() {
         val filter = IntentFilter().apply {
             addAction("com.example.homeaccountingapp.UPDATE_EXPENSES")
             addAction("com.example.homeaccountingapp.UPDATE_INCOME")
-            addAction("com.example.homeaccountingapp.UPDATE_CURRENCY") // Додаємо фільтр для оновлення валюти
         }
         LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, filter)
     }
@@ -118,49 +109,9 @@ class MainActivity : ComponentActivity() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver)
     }
 
-    private fun updateCurrency(newCurrency: String) {
-        sharedPreferences.edit().putString("SELECTED_CURRENCY", newCurrency).apply()
-        val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
-    }
-
-    // Оновлена функція для відправки broadcast
-    private fun sendUpdateBroadcast() {
-        // Створення та відправка broadcast для оновлення витрат
-        val updateExpensesIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateExpensesIntent)
-
-        // Створення та відправка broadcast для оновлення доходів
-        val updateIncomeIntent = Intent("com.example.homeaccountingapp.UPDATE_INCOME")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIncomeIntent)
-
-        // Створення та відправка broadcast для оновлення валюти
-        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateCurrencyIntent)
-    }
-
     @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun MainContent() {
-        val context = LocalContext.current
-        val sharedPreferences = context.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
-        val isFirstLaunch = sharedPreferences.getBoolean("IS_FIRST_LAUNCH", true)
-        var showCurrencyDialog by remember { mutableStateOf(isFirstLaunch) }
-        var selectedCurrency by remember { mutableStateOf(sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴") }
-
-        var incomes by remember { mutableStateOf(mapOf<String, Double>()) }
-        var expenses by remember { mutableStateOf(mapOf<String, Double>()) }
-        val totalIncomes by remember { derivedStateOf { incomes.values.sum() } }
-        val totalExpenses by remember { derivedStateOf { expenses.values.sum() } }
-
-        LaunchedEffect(Unit) {
-            if (!isFirstLaunch) {
-                // load incomes and expenses from shared preferences or view model
-                incomes = viewModel.incomes.value ?: mapOf()
-                expenses = viewModel.expenses.value ?: mapOf()
-            }
-        }
-
         MainScreen(
             onNavigateToMainActivity = {
                 val intent = Intent(this@MainActivity, MainActivity::class.java).apply {
@@ -169,51 +120,35 @@ class MainActivity : ComponentActivity() {
                 startActivity(intent)
             },
             onNavigateToIncomes = {
-                val intent = Intent(this@MainActivity, IncomeActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, IncomeActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToExpenses = {
-                val intent = Intent(this@MainActivity, ExpenseActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, ExpenseActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToIssuedOnLoan = {
-                val intent = Intent(this@MainActivity, IssuedOnLoanActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, IssuedOnLoanActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToBorrowed = {
-                val intent = Intent(this@MainActivity, BorrowedActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, BorrowedActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToAllTransactionIncome = {
-                val intent = Intent(this@MainActivity, AllTransactionIncomeActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, AllTransactionIncomeActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToAllTransactionExpense = {
-                val intent = Intent(this@MainActivity, AllTransactionExpenseActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, AllTransactionExpenseActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToBudgetPlanning = {
-                val intent = Intent(this@MainActivity, BudgetPlanningActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, BudgetPlanningActivity::class.java)
                 startActivity(intent)
             },
             onNavigateToTaskActivity = {
-                val intent = Intent(this@MainActivity, TaskActivity::class.java).apply {
-                    putExtra("SELECTED_CURRENCY", selectedCurrency)
-                }
+                val intent = Intent(this@MainActivity, TaskActivity::class.java)
                 startActivity(intent)
             },
             viewModel = viewModel,
@@ -228,91 +163,9 @@ class MainActivity : ComponentActivity() {
                     putExtra("categoryName", category)
                 }
                 startActivity(intent)
-            },
-            incomes = incomes,
-            expenses = expenses,
-            totalIncomes = totalIncomes,
-            totalExpenses = totalExpenses,
-            selectedCurrency = selectedCurrency,
-            onSettingsClick = { showCurrencyDialog = true } // Додаємо обробник натискання на іконку шестерні
+            }
         )
-
-        if (showCurrencyDialog) {
-            CurrencySelectionDialog(
-                onCurrencySelected = { currency ->
-                    updateCurrency(currency)  // Виклик функції для оновлення валюти
-                    sharedPreferences.edit().putBoolean("IS_FIRST_LAUNCH", false).apply()
-                    showCurrencyDialog = false
-                    selectedCurrency = currency
-
-                    // Load standard categories
-                    viewModel.reloadStandardCategories()
-                    incomes = viewModel.standardIncomeCategories.associateWith { 0.0 }
-                    expenses = viewModel.standardExpenseCategories.associateWith { 0.0 }
-                },
-                onDismiss = {
-                    showCurrencyDialog = false // Закриття діалогу без вибору валюти
-                }
-            )
-        }
     }
-}
-@Composable
-fun CurrencySelectionDialog(
-    onCurrencySelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val currencies = listOf("₴", "€", "$")
-    var selectedCurrency by remember { mutableStateOf(currencies[0]) }
-    val context = LocalContext.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = "Виберіть валюту") },
-        text = {
-            Column {
-                currencies.forEach { currency ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = (selectedCurrency == currency),
-                                onClick = { selectedCurrency = currency }
-                            )
-                            .padding(16.dp)
-                    ) {
-                        RadioButton(
-                            selected = (selectedCurrency == currency),
-                            onClick = { selectedCurrency = currency }
-                        )
-                        Text(text = currency, modifier = Modifier.padding(start = 16.dp))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                // Збережіть нову валюту в SharedPreferences
-                val sharedPreferences = context.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
-                sharedPreferences.edit().putString("SELECTED_CURRENCY", selectedCurrency).apply()
-
-                // Надіслати broadcast для оновлення валюти
-                val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
-                LocalBroadcastManager.getInstance(context).sendBroadcast(updateIntent)
-
-                onCurrencySelected(selectedCurrency)
-                onDismiss() // Закриваємо діалог після збереження
-            }) {
-                Text("Зберегти")
-            }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Скасувати")
-            }
-        }
-    )
 }
 // Функція Splash Screen
 @Composable
@@ -338,7 +191,6 @@ fun SplashScreen(onTimeout: () -> Unit) {
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPreferencesExpense = application.getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
     private val sharedPreferencesIncome = application.getSharedPreferences("IncomePrefs", Context.MODE_PRIVATE)
-    private val sharedPreferencesCurrency = application.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
     private val gson = Gson()
 
     private val _expenses = MutableLiveData<Map<String, Double>>()
@@ -353,46 +205,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _incomeCategories = MutableLiveData<List<String>>()
     val incomeCategories: LiveData<List<String>> = _incomeCategories
 
-    private val _selectedCurrency = MutableLiveData<String>()
-    val selectedCurrency: LiveData<String> = _selectedCurrency
-
     // Списки стандартних категорій
-    val standardExpenseCategories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Інші")
-    val standardIncomeCategories = listOf("Зарплата", "Премія", "Подарунки", "Пасивний дохід")
+    private val standardExpenseCategories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Інші")
+    private val standardIncomeCategories = listOf("Зарплата", "Премія", "Подарунки", "Пасивний дохід")
 
     init {
         loadStandardCategories()
-        _selectedCurrency.value = sharedPreferencesCurrency.getString("SELECTED_CURRENCY", "₴") ?: "₴"
-    }
-
-    fun reloadStandardCategories() {
-        _expenseCategories.value = standardExpenseCategories
-        _incomeCategories.value = standardIncomeCategories
-        saveCategories(sharedPreferencesExpense, standardExpenseCategories)
-        saveCategories(sharedPreferencesIncome, standardIncomeCategories)
-    }
-
-    fun updateCategories(newCategories: List<String>) {
-        _incomeCategories.value = newCategories
-        saveCategories(sharedPreferencesIncome, newCategories)
-    }
-
-    fun addExpenseCategory(newCategory: String) {
-        val currentCategories = _expenseCategories.value ?: emptyList()
-        if (newCategory !in currentCategories) {
-            val updatedCategories = currentCategories + newCategory
-            _expenseCategories.value = updatedCategories
-            saveCategories(sharedPreferencesExpense, updatedCategories)
-        }
-    }
-
-    fun addIncomeCategory(newCategory: String) {
-        val currentCategories = _incomeCategories.value ?: emptyList()
-        if (newCategory !in currentCategories) {
-            val updatedCategories = currentCategories + newCategory
-            _incomeCategories.value = updatedCategories
-            saveCategories(sharedPreferencesIncome, updatedCategories)
-        }
     }
 
     // Метод для завантаження стандартних категорій
@@ -516,6 +334,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _expenses.postValue(completeExpenses)
         saveExpensesToSharedPreferences(completeExpenses)
     }
+    fun addExpenseCategory(newCategory: String) {
+        val currentCategories = _expenseCategories.value ?: emptyList()
+        if (newCategory !in currentCategories) {
+            val updatedCategories = currentCategories + newCategory
+            _expenseCategories.value = updatedCategories
+            saveCategories(sharedPreferencesExpense, updatedCategories)
+        }
+    }
 
     fun refreshIncomes() {
         val transactionsJson = sharedPreferencesIncome.getString("IncomeTransactions", "[]") ?: "[]"
@@ -550,18 +376,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshCategories() {
         loadStandardCategories()
     }
-
-    fun updateCurrency(newCurrency: String) {
-        _selectedCurrency.value = newCurrency
-        sharedPreferencesCurrency.edit().putString("SELECTED_CURRENCY", newCurrency).apply()
-        sendUpdateBroadcast()
-    }
-
-    private fun sendUpdateBroadcast() {
-        val context = getApplication<Application>().applicationContext
-        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
-        LocalBroadcastManager.getInstance(context).sendBroadcast(updateCurrencyIntent)
-    }
 }
 @RequiresApi(Build.VERSION_CODES.O)
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -579,13 +393,7 @@ fun MainScreen(
     onNavigateToTaskActivity: () -> Unit,
     viewModel: MainViewModel = viewModel(),
     onIncomeCategoryClick: (String) -> Unit,
-    onExpenseCategoryClick: (String) -> Unit,
-    incomes: Map<String, Double>,
-    expenses: Map<String, Double>,
-    totalIncomes: Double,
-    totalExpenses: Double,
-    selectedCurrency: String, // Додаємо цей параметр
-    onSettingsClick: () -> Unit // Додаємо цей параметр
+    onExpenseCategoryClick: (String) -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -660,15 +468,6 @@ fun MainScreen(
                             )
                         }
                     },
-                    actions = {
-                        IconButton(onClick = onSettingsClick) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Налаштування",
-                                tint = Color.White
-                            )
-                        }
-                    },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF121212))
                 )
             },
@@ -726,7 +525,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            IncomeList(incomes = incomes, selectedCurrency = selectedCurrency, onCategoryClick = onIncomeCategoryClick)
+                                            IncomeList(incomes = incomes, onCategoryClick = onIncomeCategoryClick)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -760,7 +559,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            ExpensesList(expenses = expenses, selectedCurrency = selectedCurrency, onCategoryClick = onExpenseCategoryClick)
+                                            ExpensesList(expenses = expenses, onCategoryClick = onExpenseCategoryClick)
                                         }
                                     }
                                 }
@@ -824,7 +623,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            IncomeList(incomes = incomes, selectedCurrency = selectedCurrency, onCategoryClick = onIncomeCategoryClick)
+                                            IncomeList(incomes = incomes, onCategoryClick = onIncomeCategoryClick)
                                         }
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -858,7 +657,7 @@ fun MainScreen(
                                                 .heightIn(max = 200.dp) // Обмеження висоти списку
                                                 .verticalScroll(rememberScrollState())
                                         ) {
-                                            ExpensesList(expenses = expenses, selectedCurrency = selectedCurrency, onCategoryClick = onExpenseCategoryClick)
+                                            ExpensesList(expenses = expenses, onCategoryClick = onExpenseCategoryClick)
                                         }
                                     }
 
@@ -893,7 +692,7 @@ fun MainScreen(
                             .zIndex(0f), // Встановлення нижчого zIndex для залишку
                         contentAlignment = Alignment.BottomStart
                     ) {
-                        BalanceDisplay(balance = balance, selectedCurrency = selectedCurrency)
+                        BalanceDisplay(balance = balance)
                     }
 
                     Box(
@@ -926,10 +725,7 @@ fun MainScreen(
                                 viewModel.saveIncomeTransaction(context, incomeTransaction)
                                 viewModel.refreshIncomes()
                                 showAddIncomeTransactionDialog = false
-                            },
-                            onAddCategory = { newCategory ->
-                                viewModel.addIncomeCategory(newCategory)
-                            } // Додано параметр onAddCategory
+                            }
                         )
                     }
 
@@ -963,6 +759,7 @@ fun MainScreen(
                             )
                         }
                     }
+
 
                     Row(
                         modifier = Modifier
