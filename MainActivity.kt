@@ -118,7 +118,6 @@ class MainActivity : ComponentActivity() {
         LocalBroadcastManager.getInstance(this).unregisterReceiver(updateReceiver)
     }
 
-    // Додайте функцію для оновлення валюти
     private fun updateCurrency(newCurrency: String) {
         sharedPreferences.edit().putString("SELECTED_CURRENCY", newCurrency).apply()
         val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
@@ -130,6 +129,10 @@ class MainActivity : ComponentActivity() {
         // Створення та відправка broadcast для оновлення витрат
         val updateExpensesIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
         LocalBroadcastManager.getInstance(this).sendBroadcast(updateExpensesIntent)
+
+        // Створення та відправка broadcast для оновлення доходів
+        val updateIncomeIntent = Intent("com.example.homeaccountingapp.UPDATE_INCOME")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIncomeIntent)
 
         // Створення та відправка broadcast для оновлення валюти
         val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
@@ -235,41 +238,39 @@ class MainActivity : ComponentActivity() {
         )
 
         if (showCurrencyDialog) {
-            CurrencySelectionDialog(onCurrencySelected = { currency ->
-                updateCurrency(currency)  // Виклик функції для оновлення валюти
-                sharedPreferences.edit().putBoolean("IS_FIRST_LAUNCH", false).apply()
-                showCurrencyDialog = false
-                selectedCurrency = currency
+            CurrencySelectionDialog(
+                onCurrencySelected = { currency ->
+                    updateCurrency(currency)  // Виклик функції для оновлення валюти
+                    sharedPreferences.edit().putBoolean("IS_FIRST_LAUNCH", false).apply()
+                    showCurrencyDialog = false
+                    selectedCurrency = currency
 
-                // Load standard categories
-                viewModel.reloadStandardCategories()
-                incomes = viewModel.standardIncomeCategories.associateWith { 0.0 }
-                expenses = viewModel.standardExpenseCategories.associateWith { 0.0 }
-            })
+                    // Load standard categories
+                    viewModel.reloadStandardCategories()
+                    incomes = viewModel.standardIncomeCategories.associateWith { 0.0 }
+                    expenses = viewModel.standardExpenseCategories.associateWith { 0.0 }
+                },
+                onDismiss = {
+                    showCurrencyDialog = false // Закриття діалогу без вибору валюти
+                }
+            )
         }
     }
 }
 @Composable
-fun CurrencySelectionDialog(onCurrencySelected: (String) -> Unit) {
+fun CurrencySelectionDialog(
+    onCurrencySelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     val currencies = listOf("₴", "€", "$")
     var selectedCurrency by remember { mutableStateOf(currencies[0]) }
+    val context = LocalContext.current
 
     AlertDialog(
-        onDismissRequest = {},
-        title = {
-            Text(text = "Виберіть валюту")
-        },
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Виберіть валюту") },
         text = {
-            Column(
-                modifier = Modifier
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Gray.copy(alpha = 0.8f), Color.Transparent)
-                        )
-                    )
-                    .border(1.dp, Color.Gray)
-                    .padding(16.dp)
-            ) {
+            Column {
                 currencies.forEach { currency ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -279,7 +280,7 @@ fun CurrencySelectionDialog(onCurrencySelected: (String) -> Unit) {
                                 selected = (selectedCurrency == currency),
                                 onClick = { selectedCurrency = currency }
                             )
-                            .padding(horizontal = 16.dp)
+                            .padding(16.dp)
                     ) {
                         RadioButton(
                             selected = (selectedCurrency == currency),
@@ -291,16 +292,26 @@ fun CurrencySelectionDialog(onCurrencySelected: (String) -> Unit) {
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onCurrencySelected(selectedCurrency)
-                }
-            ) {
+            Button(onClick = {
+                // Збережіть нову валюту в SharedPreferences
+                val sharedPreferences = context.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
+                sharedPreferences.edit().putString("SELECTED_CURRENCY", selectedCurrency).apply()
+
+                // Надіслати broadcast для оновлення валюти
+                val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
+                LocalBroadcastManager.getInstance(context).sendBroadcast(updateIntent)
+
+                onCurrencySelected(selectedCurrency)
+                onDismiss() // Закриваємо діалог після збереження
+            }) {
                 Text("Зберегти")
             }
         },
-        dismissButton = {},
-        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Скасувати")
+            }
+        }
     )
 }
 // Функція Splash Screen
@@ -327,6 +338,7 @@ fun SplashScreen(onTimeout: () -> Unit) {
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPreferencesExpense = application.getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
     private val sharedPreferencesIncome = application.getSharedPreferences("IncomePrefs", Context.MODE_PRIVATE)
+    private val sharedPreferencesCurrency = application.getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
     private val gson = Gson()
 
     private val _expenses = MutableLiveData<Map<String, Double>>()
@@ -341,23 +353,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _incomeCategories = MutableLiveData<List<String>>()
     val incomeCategories: LiveData<List<String>> = _incomeCategories
 
+    private val _selectedCurrency = MutableLiveData<String>()
+    val selectedCurrency: LiveData<String> = _selectedCurrency
+
     // Списки стандартних категорій
     val standardExpenseCategories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Інші")
     val standardIncomeCategories = listOf("Зарплата", "Премія", "Подарунки", "Пасивний дохід")
 
     init {
         loadStandardCategories()
+        _selectedCurrency.value = sharedPreferencesCurrency.getString("SELECTED_CURRENCY", "₴") ?: "₴"
     }
+
     fun reloadStandardCategories() {
         _expenseCategories.value = standardExpenseCategories
         _incomeCategories.value = standardIncomeCategories
         saveCategories(sharedPreferencesExpense, standardExpenseCategories)
         saveCategories(sharedPreferencesIncome, standardIncomeCategories)
     }
+
     fun updateCategories(newCategories: List<String>) {
         _incomeCategories.value = newCategories
         saveCategories(sharedPreferencesIncome, newCategories)
     }
+
     fun addExpenseCategory(newCategory: String) {
         val currentCategories = _expenseCategories.value ?: emptyList()
         if (newCategory !in currentCategories) {
@@ -366,6 +385,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             saveCategories(sharedPreferencesExpense, updatedCategories)
         }
     }
+
     fun addIncomeCategory(newCategory: String) {
         val currentCategories = _incomeCategories.value ?: emptyList()
         if (newCategory !in currentCategories) {
@@ -529,6 +549,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshCategories() {
         loadStandardCategories()
+    }
+
+    fun updateCurrency(newCurrency: String) {
+        _selectedCurrency.value = newCurrency
+        sharedPreferencesCurrency.edit().putString("SELECTED_CURRENCY", newCurrency).apply()
+        sendUpdateBroadcast()
+    }
+
+    private fun sendUpdateBroadcast() {
+        val context = getApplication<Application>().applicationContext
+        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
+        LocalBroadcastManager.getInstance(context).sendBroadcast(updateCurrencyIntent)
     }
 }
 @RequiresApi(Build.VERSION_CODES.O)
