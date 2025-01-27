@@ -358,6 +358,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _incomeCategories.value = newCategories
         saveCategories(sharedPreferencesIncome, newCategories)
     }
+    fun addIncomeCategory(newCategory: String) {
+        val currentCategories = _incomeCategories.value ?: emptyList()
+        if (newCategory !in currentCategories) {
+            val updatedCategories = currentCategories + newCategory
+            _incomeCategories.value = updatedCategories
+            saveCategories(sharedPreferencesIncome, updatedCategories)
+        }
+    }
 
     // Метод для завантаження стандартних категорій
     fun loadStandardCategories() {
@@ -877,7 +885,7 @@ fun MainScreen(
                                 showAddIncomeTransactionDialog = false
                             },
                             onAddCategory = { newCategory ->
-                                viewModel.updateCategories(viewModel.standardIncomeCategories + newCategory)
+                                viewModel.addIncomeCategory(newCategory)
                             } // Додано параметр onAddCategory
                         )
                     }
