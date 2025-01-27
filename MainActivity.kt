@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -29,6 +30,7 @@ import com.serhio.homeaccountingapp.ui.theme.HomeAccountingAppTheme
 import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.ContentScale
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -69,6 +71,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var updateReceiver: BroadcastReceiver
     private lateinit var sharedPreferences: SharedPreferences
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedPreferences = getSharedPreferences("com.serhio.homeaccountingapp.PREFERENCES", Context.MODE_PRIVATE)
@@ -133,6 +136,7 @@ class MainActivity : ComponentActivity() {
         LocalBroadcastManager.getInstance(this).sendBroadcast(updateCurrencyIntent)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     @Composable
     fun MainContent() {
         val context = LocalContext.current
@@ -507,6 +511,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         loadStandardCategories()
     }
 }
+@RequiresApi(Build.VERSION_CODES.O)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalPagerApi::class, ExperimentalMaterial3Api::class)
 @Composable
