@@ -354,6 +354,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         saveCategories(sharedPreferencesExpense, standardExpenseCategories)
         saveCategories(sharedPreferencesIncome, standardIncomeCategories)
     }
+    fun updateCategories(newCategories: List<String>) {
+        _incomeCategories.value = newCategories
+        saveCategories(sharedPreferencesIncome, newCategories)
+    }
 
     // Метод для завантаження стандартних категорій
     fun loadStandardCategories() {
@@ -871,7 +875,10 @@ fun MainScreen(
                                 viewModel.saveIncomeTransaction(context, incomeTransaction)
                                 viewModel.refreshIncomes()
                                 showAddIncomeTransactionDialog = false
-                            }
+                            },
+                            onAddCategory = { newCategory ->
+                                viewModel.updateCategories(viewModel.standardIncomeCategories + newCategory)
+                            } // Додано параметр onAddCategory
                         )
                     }
 
