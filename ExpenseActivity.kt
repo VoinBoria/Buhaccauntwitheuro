@@ -94,10 +94,6 @@ class ExpenseActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         sharedPreferences = getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
 
-        // Отримання вибраної валюти з SharedPreferences
-        val selectedCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
-        viewModel.selectedCurrency = selectedCurrency
-
         loadExpensesFromSharedPreferences()
         loadCategoriesFromSharedPreferences() // Завантаження категорій
 
@@ -149,7 +145,6 @@ class ExpenseActivity : ComponentActivity() {
                         content = { innerPadding ->
                             ExpenseScreen(
                                 viewModel = viewModel,
-                                selectedCurrency = viewModel.selectedCurrency, // Передаємо вибрану валюту
                                 onOpenTransactionScreen = { categoryName, transactionsJson ->
                                     val intent = Intent(this, ExpenseTransactionActivity::class.java).apply {
                                         putExtra("categoryName", categoryName)
@@ -173,27 +168,18 @@ class ExpenseActivity : ComponentActivity() {
 
         updateReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES" || intent.action == "com.example.homeaccountingapp.UPDATE_CURRENCY") {
-                    val newCurrency = sharedPreferences.getString("SELECTED_CURRENCY", "₴") ?: "₴"
-                    viewModel.selectedCurrency = newCurrency
+                if (intent.action == "com.example.homeaccountingapp.UPDATE_EXPENSES") {
                     viewModel.loadData()
                 }
             }
         }
-        val filter = IntentFilter("com.example.homeaccountingapp.UPDATE_EXPENSES").apply {
-            addAction("com.example.homeaccountingapp.UPDATE_CURRENCY")
-        }
+        val filter = IntentFilter("com.example.homeaccountingapp.UPDATE_EXPENSES")
         LocalBroadcastManager.getInstance(this).registerReceiver(updateReceiver, filter)
     }
 
     private fun sendUpdateBroadcast() {
-        // Створення та відправка broadcast для оновлення витрат
-        val updateExpensesIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateExpensesIntent)
-
-        // Створення та відправка broadcast для оновлення валюти
-        val updateCurrencyIntent = Intent("com.example.homeaccountingapp.UPDATE_CURRENCY")
-        LocalBroadcastManager.getInstance(this).sendBroadcast(updateCurrencyIntent)
+        val updateIntent = Intent("com.example.homeaccountingapp.UPDATE_EXPENSES")
+        LocalBroadcastManager.getInstance(this).sendBroadcast(updateIntent)
     }
 
     private fun loadExpensesFromSharedPreferences() {
@@ -228,7 +214,6 @@ class ExpenseActivity : ComponentActivity() {
     }
 }
 
-
 class ExpenseViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPreferences = application.getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
     private val gson = Gson()
@@ -241,9 +226,6 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     private val _sortedTransactions = MutableStateFlow<List<Transaction>>(emptyList())
     val sortedTransactions: StateFlow<List<Transaction>> = _sortedTransactions
 
-    // Додайте змінну selectedCurrency
-    var selectedCurrency by mutableStateOf("₴")
-
     // Створення властивості для зберігання функції
     private var sendUpdateBroadcast: (() -> Unit)? = null
 
@@ -255,14 +237,6 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
     fun setSendUpdateBroadcast(sendUpdateBroadcast: () -> Unit) {
         this.sendUpdateBroadcast = sendUpdateBroadcast
     }
-    fun addCategory(newCategory: String) {
-        if (newCategory !in categories) {
-            categories = categories + newCategory
-            saveCategories(categories)
-            updateExpenses()
-            sendUpdateBroadcast()
-        }
-    }
 
     // Додайте цю функцію для відправки broadcast
     private fun sendUpdateBroadcast() {
@@ -271,13 +245,13 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 
     // Завантаження стандартних категорій
     fun loadStandardCategories() {
-        categories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки")
+        categories = listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки", "Хобі", "Благодійність", "Спорт", "Техніка")
         saveCategories(categories)
     }
 
     // Отримання стандартних категорій
     fun getStandardCategories(): List<String> {
-        return listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки")
+        return listOf("Аренда", "Комунальні послуги", "Транспорт", "Розваги", "Продукти", "Одяг", "Здоров'я", "Освіта", "Подарунки", "Хобі", "Благодійність", "Спорт", "Техніка")
     }
 
     // Функція для завантаження даних
@@ -332,18 +306,6 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         sendUpdateBroadcast()
     }
 
-    fun addTransaction(newTransaction: Transaction) {
-        viewModelScope.launch {
-            val currentTransactions = loadTransactions().toMutableList()
-            currentTransactions.add(newTransaction)
-            _transactions.value = currentTransactions
-            saveTransactions(currentTransactions)
-            updateExpenses()
-            sortTransactions(sortType)
-            sendUpdateBroadcast()
-        }
-    }
-
     // Нова функція для фільтрації транзакцій за періодом
     @RequiresApi(Build.VERSION_CODES.O)
     fun filterByPeriod(startDate: LocalDate, endDate: LocalDate) {
@@ -374,11 +336,30 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         updateExpenses()  // Оновлення витрат після зміни категорії
         sendUpdateBroadcast()
     }
+    fun addCategory(newCategory: String) {
+        if (newCategory !in categories) {
+            categories = categories + newCategory
+            saveCategories(categories)
+            updateExpenses()
+            sendUpdateBroadcast()
+        }
+    }
 
     fun saveCategories(categories: List<String>) {
         Log.d(TAG, "Saving categories: $categories")  // Логування перед збереженням
         sharedPreferences.edit().putString("categories", gson.toJson(categories)).apply()
         sendUpdateBroadcast()
+    }
+    fun addTransaction(newTransaction: Transaction) {
+        viewModelScope.launch {
+            val currentTransactions = loadTransactions().toMutableList()
+            currentTransactions.add(newTransaction)
+            _transactions.value = currentTransactions
+            saveTransactions(currentTransactions)
+            updateExpenses()
+            sortTransactions(sortType)
+            sendUpdateBroadcast()
+        }
     }
 
     // Функція для збереження транзакцій
@@ -419,7 +400,6 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         editor.apply()
     }
 
-
     // Функція для оновлення транзакції
     fun updateTransaction(updatedTransaction: Transaction) {
         _transactions.value = _transactions.value.map {
@@ -449,7 +429,6 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
 @Composable
 fun ExpenseScreen(
     viewModel: ExpenseViewModel,
-    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onOpenTransactionScreen: (String, String) -> Unit,
     onDeleteCategory: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -497,7 +476,6 @@ fun ExpenseScreen(
                             CategoryRow(
                                 category = category,
                                 expenseAmount = categoryExpenses[category] ?: 0.0,
-                                selectedCurrency = selectedCurrency, // Передаємо вибрану валюту
                                 onClick = {
                                     onOpenTransactionScreen(category, Gson().toJson(transactions))
                                 },
@@ -575,7 +553,7 @@ fun ExpenseScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Text(
-                    text = "${totalExpense.formatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
+                    text = "${totalExpense.formatAmount(2)} грн",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = Color.White
                 )
@@ -670,7 +648,6 @@ fun ExpenseScreen(
 fun CategoryRow(
     category: String,
     expenseAmount: Double,
-    selectedCurrency: String, // Додаємо параметр для вибраної валюти
     onClick: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit
@@ -705,7 +682,7 @@ fun CategoryRow(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = "${expenseAmount.formatAmount(2)} $selectedCurrency", // Використовуємо вибрану валюту
+                text = "${expenseAmount.formatAmount(2)} грн",
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = fontSize),
                 color = Color.White,
                 modifier = Modifier.padding(end = 8.dp)
