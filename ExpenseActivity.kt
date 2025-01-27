@@ -89,6 +89,7 @@ class ExpenseActivity : ComponentActivity() {
         startActivity(intent)
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sharedPreferences = getSharedPreferences("ExpensePrefs", Context.MODE_PRIVATE)
@@ -433,6 +434,7 @@ class ExpenseViewModel(application: Application) : AndroidViewModel(application)
         private const val TAG = "ExpenseViewModel"
     }
 }
+@RequiresApi(Build.VERSION_CODES.O)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun ExpenseScreen(
@@ -865,6 +867,7 @@ fun AddCategoryDialog(
         containerColor = Color(0xFF2B2B2B)
     )
 }
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddTransactionDialog(
