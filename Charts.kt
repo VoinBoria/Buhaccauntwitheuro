@@ -360,22 +360,22 @@ fun ExpandableButtonWithAmount(
 @Composable
 fun IncomeList(
     incomes: Map<String, Double>,
-    onCategoryClick: (String) -> Unit // Додаємо параметр для обробки переходу
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
+    onCategoryClick: (String) -> Unit
 ) {
-    // Сортування категорій за сумою у спадному порядку
     val sortedIncomes = incomes.toList().sortedByDescending { (_, amount) -> amount }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 400.dp) // Обмеження висоти списку
+            .heightIn(max = 400.dp)
     ) {
         items(sortedIncomes) { (category, amount) ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp, horizontal = 8.dp)
-                    .clickable { onCategoryClick(category) } // Додаємо обробку натискання
+                    .clickable { onCategoryClick(category) }
             ) {
                 Row(
                     modifier = Modifier
@@ -389,7 +389,7 @@ fun IncomeList(
                         style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
                     )
                     Text(
-                        text = "${"%.2f".format(amount)} грн",
+                        text = "${"%.2f".format(amount)} $selectedCurrency", // Використовуємо вибрану валюту
                         style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
                     )
                 }
@@ -401,22 +401,22 @@ fun IncomeList(
 @Composable
 fun ExpensesList(
     expenses: Map<String, Double>,
-    onCategoryClick: (String) -> Unit // Додаємо параметр для обробки переходу
+    selectedCurrency: String, // Додаємо параметр для вибраної валюти
+    onCategoryClick: (String) -> Unit
 ) {
-    // Сортування категорій за сумою у зростаючому порядку
     val sortedExpenses = expenses.toList().sortedBy { (_, amount) -> amount }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 400.dp) // Обмеження висоти списку
+            .heightIn(max = 400.dp)
     ) {
         items(sortedExpenses) { (category, amount) ->
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp, horizontal = 8.dp)
-                    .clickable { onCategoryClick(category) } // Додаємо обробку натискання
+                    .clickable { onCategoryClick(category) }
             ) {
                 Row(
                     modifier = Modifier
@@ -430,7 +430,7 @@ fun ExpensesList(
                         style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
                     )
                     Text(
-                        text = "${"%.2f".format(amount)} грн",
+                        text = "${"%.2f".format(amount)} $selectedCurrency", // Використовуємо вибрану валюту
                         style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
                     )
                 }
