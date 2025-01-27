@@ -358,6 +358,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _incomeCategories.value = newCategories
         saveCategories(sharedPreferencesIncome, newCategories)
     }
+    fun addExpenseCategory(newCategory: String) {
+        val currentCategories = _expenseCategories.value ?: emptyList()
+        if (newCategory !in currentCategories) {
+            val updatedCategories = currentCategories + newCategory
+            _expenseCategories.value = updatedCategories
+            saveCategories(sharedPreferencesExpense, updatedCategories)
+        }
+    }
     fun addIncomeCategory(newCategory: String) {
         val currentCategories = _incomeCategories.value ?: emptyList()
         if (newCategory !in currentCategories) {
@@ -867,10 +875,13 @@ fun MainScreen(
                         AddTransactionDialog(
                             categories = expenseCategories,
                             onDismiss = { showAddExpenseTransactionDialog = false },
-                            onSave = { transaction ->
+                            onSave = { transaction: Transaction -> // Явно вказуємо тип параметра
                                 viewModel.saveExpenseTransaction(context, transaction)
                                 viewModel.refreshExpenses()
                                 showAddExpenseTransactionDialog = false
+                            },
+                            onAddCategory = { newCategory ->
+                                viewModel.addExpenseCategory(newCategory) // Виклик методу для додавання нової категорії
                             }
                         )
                     }
